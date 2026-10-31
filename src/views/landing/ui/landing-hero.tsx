@@ -12,7 +12,7 @@ export function LandingHero() {
             <h1 id="landing-title">امنیت را فقط نبینید؛<br /><em>برای آن اقدام کنید.</em></h1>
             <p>وضعیت تجهیزات، لاگ‌ها و هشدارهای شبکه را در یک محیط بررسی کنید. با فرمان‌های فارسی و دستیار هوشمند، اقدام موردنیاز را انتخاب کنید و پس از بررسی و تأیید، نتیجه اجرای آن را ببینید.</p>
             <div className={cx("landing-hero__actions")}>
-              <Link href="/dashboard" prefetch={false}>ورود به سامانه <ChevronLeft /></Link>
+              <Link href="/login" prefetch={false}>ورود به سامانه <ChevronLeft /></Link>
               <span><ShieldCheck /> اجرای دستورها پس از بررسی و تأیید شما</span>
             </div>
             <dl className={cx("hero-trust")} aria-label="سامانه در یک نگاه">

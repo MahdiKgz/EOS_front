@@ -27,6 +27,8 @@
   --success: #2dd4bf;
   --warning: #f1ba65;
   --destructive: #ff738a;
+  --destructive-strong: #b91c1c;
+  --destructive-soft: #fee2e2;
   --destructive-foreground: var(--primary-foreground);
   --border-color: #729bb1;
   --border: color-mix(in srgb, var(--border-color) 18%, transparent);

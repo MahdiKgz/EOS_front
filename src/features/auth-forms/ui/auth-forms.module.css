@@ -1,0 +1,49 @@
+.form {
+  display: grid;
+  gap: 20px;
+}
+.field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.labelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+}
+.labelRow label {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+.labelRow a {
+  color: var(--primary-soft);
+  font-size: 0.7rem;
+  text-underline-offset: 5px;
+}
+.labelRow a:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+.error {
+  color: var(--destructive);
+  font-size: 0.72rem;
+  line-height: 1.8;
+}
+.hint {
+  color: var(--text-subtle);
+  font-size: 0.68rem;
+  line-height: 1.8;
+}
+.notice {
+  min-height: 22px;
+  color: var(--primary-soft);
+  font-size: 0.75rem;
+  line-height: 1.9;
+}
+
+.fields { display: grid; gap: 20px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.fields:disabled { opacity: .75; }
+.labelRow a[aria-disabled="true"] { pointer-events: none; opacity: .5; }

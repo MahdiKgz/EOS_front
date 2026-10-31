@@ -558,3 +558,6 @@
 @media (prefers-reduced-motion: reduce) {
   .landing, .landing *, .landing *::before, .landing *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
 }
+
+.landing .landing-header__anchor { max-width: min(280px, 45vw); }
+.header-account-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

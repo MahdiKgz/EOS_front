@@ -1,0 +1,7 @@
+.intro { margin-bottom: 32px; }
+.intro > span { color: var(--primary-soft); font-size: .75rem; }
+.intro h1 { margin: 12px 0; font-size: clamp(1.35rem, 1.65vw, 1.75rem); font-weight: 700; line-height: 1.7; letter-spacing: -.02em; }
+.intro > p { color: var(--muted-foreground); font-size: .8rem; line-height: 2; }
+.navigation { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border); text-align: center; color: var(--muted-foreground); font-size: .75rem; line-height: 2; }
+.navigation a { margin-inline-start: 4px; color: var(--primary-soft); font-weight: 600; text-underline-offset: 5px; }
+.navigation a:hover { color: var(--primary); text-decoration: underline; }
