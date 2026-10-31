@@ -1,0 +1,64 @@
+/* Shared semantic palette: edit these tokens to restyle the application. */
+:root {
+  color-scheme: dark;
+  --background: #080f17;
+  --background-middle: #09121b;
+  --background-end: #071018;
+  --foreground: #eef8fa;
+  --foreground-strong: #ffffff;
+  --card: #0c1723;
+  --card-foreground: var(--foreground);
+  --surface-raised: #10202f;
+  --surface-hover: #112533;
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --primary: #45d7e6;
+  --primary-foreground: #051219;
+  --primary-soft: color-mix(in srgb, var(--primary) 65%, var(--foreground));
+  --secondary: var(--surface-raised);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--card);
+  --muted-foreground: #91a6b5;
+  --text-subtle: #718995;
+  --text-faint: #536b7a;
+  --accent: #8b7cff;
+  --accent-foreground: #ffffff;
+  --accent-soft: color-mix(in srgb, var(--accent) 75%, var(--foreground));
+  --success: #2dd4bf;
+  --warning: #f1ba65;
+  --destructive: #ff738a;
+  --destructive-foreground: var(--primary-foreground);
+  --border-color: #729bb1;
+  --border: color-mix(in srgb, var(--border-color) 18%, transparent);
+  --input: color-mix(in srgb, var(--border-color) 30%, transparent);
+  --ring: var(--primary);
+  --shadow-color: #000000;
+  --mask-color: #000000;
+  --radius: 0.625rem;
+}
+
+/* Optional light palette; set data-theme="light" on <html>. */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --background: #f8fafc;
+  --background-middle: #f1f5f9;
+  --background-end: #eaf1f7;
+  --foreground: #172b3a;
+  --foreground-strong: #061522;
+  --card: #ffffff;
+  --surface-raised: #e7eff6;
+  --surface-hover: #dce8f2;
+  --primary: #087f8c;
+  --primary-foreground: #ffffff;
+  --muted-foreground: #4c6575;
+  --text-subtle: #5a7180;
+  --text-faint: #6b8190;
+  --accent: #6752c8;
+  --accent-foreground: #ffffff;
+  --success: #087f6d;
+  --warning: #986209;
+  --destructive: #bd3353;
+  --destructive-foreground: #ffffff;
+  --border-color: #527489;
+  --shadow-color: #27465e;
+}
