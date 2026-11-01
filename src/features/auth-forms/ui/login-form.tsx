@@ -19,27 +19,93 @@ export function LoginForm() {
   const [login, { isLoading }] = useLoginMutation();
   const locked = useRef(false);
   const [redirecting, setRedirecting] = useState(false);
-  const { register, handleSubmit, setError, clearErrors, formState: { errors, isSubmitting, isValid } } = useForm<LoginValues>({ resolver: zodResolver(loginSchema), mode: "onChange", defaultValues: { username: "", password: "" } });
+  const {
+    register,
+    handleSubmit,
+    setError,
+    clearErrors,
+    formState: { errors, isSubmitting, isValid },
+  } = useForm<LoginValues>({
+    resolver: zodResolver(loginSchema),
+    mode: "onChange",
+    defaultValues: { username: "", password: "" },
+  });
   const pending = isLoading || isSubmitting || redirecting;
   async function submit(values: LoginValues) {
     if (locked.current) return;
-    locked.current = true; clearErrors("root");
+    locked.current = true;
+    clearErrors("root");
     try {
       await login(values).unwrap();
-      setRedirecting(true); toast.success("با موفقیت وارد شدید."); router.replace("/dashboard"); router.refresh();
-    } catch (error) { const message = apiErrorMessage(error); setError("root.server", { message }); toast.error(message); }
-    finally { locked.current = false; }
+      setRedirecting(true);
+      toast.success("با موفقیت وارد شدید.");
+      router.replace("/dashboard");
+      router.refresh();
+    } catch (error) {
+      const message = apiErrorMessage(error);
+      setError("root.server", { message });
+      toast.error(message);
+    } finally {
+      locked.current = false;
+    }
   }
-  return <form className={styles.form} onSubmit={event => { void handleSubmit(submit)(event); }} noValidate aria-busy={pending}>
-    <fieldset className={styles.fields} disabled={pending}>
-      <FormField id="login-username" label="نام کاربری" error={errors.username?.message}>
-        <Input id="login-username" dir="ltr" autoComplete="username" autoCapitalize="none" spellCheck={false} placeholder="username" className="h-11" maxLength={64} aria-invalid={!!errors.username} aria-describedby={errors.username ? "login-username-error" : undefined} {...register("username")} />
-      </FormField>
-      <FormField id="login-password" label="رمز عبور" error={errors.password?.message} action={<Link href="/forget-password" aria-disabled={pending} tabIndex={pending ? -1 : undefined} onClick={event => { if (pending) event.preventDefault(); }}>فراموشی رمز عبور</Link>}>
-        <PasswordInput id="login-password" autoComplete="current-password" maxLength={128} placeholder="رمز عبور خود را وارد کنید" aria-invalid={!!errors.password} aria-describedby={errors.password ? "login-password-error" : undefined} {...register("password")} />
-      </FormField>
-      <SubmitButton pending={pending} disabled={!isValid} pendingLabel="در حال ورود…">ورود به سامانه</SubmitButton>
-    </fieldset>
-    <FormMessage message={errors.root?.server?.message} error />
-  </form>;
+  return (
+    <form
+      className={styles.form}
+      onSubmit={(event) => {
+        void handleSubmit(submit)(event);
+      }}
+      noValidate
+      aria-busy={pending}
+    >
+      <fieldset className={styles.fields} disabled={pending}>
+        <FormField id="login-username" label="نام کاربری" error={errors.username?.message}>
+          <Input
+            id="login-username"
+            dir="ltr"
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder="username"
+            className="h-11"
+            maxLength={64}
+            aria-invalid={!!errors.username}
+            aria-describedby={errors.username ? "login-username-error" : undefined}
+            {...register("username")}
+          />
+        </FormField>
+        <FormField
+          id="login-password"
+          label="رمز عبور"
+          error={errors.password?.message}
+          action={
+            <Link
+              href="/forget-password"
+              aria-disabled={pending}
+              tabIndex={pending ? -1 : undefined}
+              onClick={(event) => {
+                if (pending) event.preventDefault();
+              }}
+            >
+              فراموشی رمز عبور
+            </Link>
+          }
+        >
+          <PasswordInput
+            id="login-password"
+            autoComplete="current-password"
+            maxLength={128}
+            placeholder="رمز عبور خود را وارد کنید"
+            aria-invalid={!!errors.password}
+            aria-describedby={errors.password ? "login-password-error" : undefined}
+            {...register("password")}
+          />
+        </FormField>
+        <SubmitButton pending={pending} disabled={!isValid} pendingLabel="در حال ورود…">
+          ورود به سامانه
+        </SubmitButton>
+      </fieldset>
+      <FormMessage message={errors.root?.server?.message} error />
+    </form>
+  );
 }

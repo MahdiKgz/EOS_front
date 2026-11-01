@@ -36,12 +36,30 @@
   --ring: var(--primary);
   --shadow-color: #000000;
   --mask-color: #000000;
+  --sidebar-background: #03121b;
+  --sidebar-glow: #202c49;
+  --sidebar-dashboard: #00cce8;
+  --sidebar-assets: #a489ef;
+  --sidebar-security: #fb526d;
+  --sidebar-actions: #f5c400;
+  --sidebar-reports: #4b9ef5;
+  --sidebar-lab: #00cce8;
+  --sidebar-selected: #5aa8ff;
   --radius: 0.625rem;
 }
 
 /* Optional light palette; set data-theme="light" on <html>. */
 :root[data-theme="light"] {
   color-scheme: light;
+  --sidebar-background: #f4f8fc;
+  --sidebar-glow: #e0e5f5;
+  --sidebar-dashboard: #087f8c;
+  --sidebar-assets: #7951c4;
+  --sidebar-security: #bd3353;
+  --sidebar-actions: #986209;
+  --sidebar-reports: #246fbe;
+  --sidebar-lab: #087f8c;
+  --sidebar-selected: #246fbe;
   --background: #f8fafc;
   --background-middle: #f1f5f9;
   --background-end: #eaf1f7;

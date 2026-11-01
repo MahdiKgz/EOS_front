@@ -13,7 +13,9 @@ export function LandingPage() {
   return (
     <div id="landing" className={`${cx("landing")} ${iranYekan.variable}`} dir="rtl">
       <SmoothSectionNavigation rootId="landing" />
-      <a href="#main-content" className={cx("skip-link")}>رفتن به محتوای اصلی</a>
+      <a href="#main-content" className={cx("skip-link")}>
+        رفتن به محتوای اصلی
+      </a>
       <div className={cx("landing-grid")} aria-hidden="true" />
       <LandingHeader />
       <main id="main-content" tabIndex={-1}>

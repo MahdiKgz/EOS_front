@@ -9,11 +9,18 @@
   color: var(--muted-foreground);
   background: transparent;
   cursor: pointer;
-  transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease;
+  transition:
+    color 180ms ease,
+    background-color 180ms ease,
+    border-color 180ms ease;
 }
 .logout:is(:hover, :focus-visible):not(:disabled) {
   color: var(--destructive-strong);
   background: var(--destructive-soft);
   border-color: color-mix(in srgb, var(--destructive-strong) 20%, transparent);
 }
-@media (prefers-reduced-motion: reduce) { .logout { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .logout {
+    transition: none;
+  }
+}

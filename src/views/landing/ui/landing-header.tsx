@@ -6,7 +6,11 @@ import { BrandMark } from "./brand-mark";
 import { cx } from "./classes";
 
 export function LandingHeader() {
-  const { data, error, isLoading, refetch } = useMeQuery(undefined, { pollingInterval: 60000, refetchOnFocus: true, refetchOnReconnect: true });
+  const { data, error, isLoading, refetch } = useMeQuery(undefined, {
+    pollingInterval: 60000,
+    refetchOnFocus: true,
+    refetchOnReconnect: true,
+  });
   const user = error ? undefined : data?.user;
   const unavailable = error && !("status" in error && error.status === 401);
   return (
@@ -24,10 +28,29 @@ export function LandingHeader() {
         <a href="#workflow">چرخه اقدام</a>
         <a href="#team">تیم</a>
       </nav>
-      {isLoading ? <span className={cx("landing-header__anchor")} role="status">در حال بررسی…</span>
-        : unavailable ? <button type="button" className={cx("landing-header__anchor")} onClick={() => void refetch()}>تلاش دوباره</button>
-        : <Link className={cx("landing-header__anchor")} href={user ? "/dashboard" : "/login"} prefetch={false}><span className={cx("header-account-label")}>{user ? `${user.displayName} / داشبورد` : "ورود / ثبت نام"}</span></Link>}
-
+      {isLoading ? (
+        <span className={cx("landing-header__anchor")} role="status">
+          در حال بررسی…
+        </span>
+      ) : unavailable ? (
+        <button
+          type="button"
+          className={cx("landing-header__anchor")}
+          onClick={() => void refetch()}
+        >
+          تلاش دوباره
+        </button>
+      ) : (
+        <Link
+          className={cx("landing-header__anchor")}
+          href={user ? "/dashboard" : "/login"}
+          prefetch={false}
+        >
+          <span className={cx("header-account-label")}>
+            {user ? `${user.displayName} / داشبورد` : "ورود / ثبت نام"}
+          </span>
+        </Link>
+      )}
     </header>
   );
 }

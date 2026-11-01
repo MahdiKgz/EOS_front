@@ -111,3 +111,10 @@ pnpm start
 ```
 
 منابع: [Next.js](https://nextjs.org/docs/app/getting-started/installation)، [FSD](https://feature-sliced.design/docs/get-started/overview)، [shadcn/ui](https://ui.shadcn.com/docs/installation/manual).
+
+## Code formatting
+
+- `pnpm format`: format the project with Prettier.
+- `pnpm format:check`: check formatting without changing files.
+- Husky runs `lint-staged` before every commit to format staged files and include the changes in the commit. A formatting failure blocks the commit.
+- `pnpm install` activates the hooks through the `prepare` script.

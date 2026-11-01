@@ -3,6 +3,9 @@ import { cx } from "./classes";
 
 export function BrandMark() {
   return (
-    <span className={cx("landing-brand-mark")}  aria-hidden="true"><ShieldCheck /><i /></span>
+    <span className={cx("landing-brand-mark")} aria-hidden="true">
+      <ShieldCheck />
+      <i />
+    </span>
   );
 }

@@ -12,7 +12,7 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
   const response = await backendRequest("/auth/me", { token });
   if (response.status === 401) return null;
   if (!response.ok) throw new Error("Session service unavailable");
-  const data = await response.json() as { user: User };
+  const data = (await response.json()) as { user: User };
   return data.user;
 });
 

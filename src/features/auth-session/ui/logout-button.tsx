@@ -16,10 +16,36 @@ export function LogoutButton() {
   useMeQuery(undefined, { pollingInterval: 60000, refetchOnFocus: true, refetchOnReconnect: true });
   async function exit() {
     if (isLoading || leaving) return;
-    try { await logout().unwrap(); setLeaving(true); dispatch(userApi.util.resetApiState()); toast.success("از حساب کاربری خارج شدید."); router.replace("/login"); router.refresh(); }
-    catch (error) { toast.error(apiErrorMessage(error)); }
+    try {
+      await logout().unwrap();
+      setLeaving(true);
+      dispatch(userApi.util.resetApiState());
+      toast.success("از حساب کاربری خارج شدید.");
+      router.replace("/login");
+      router.refresh();
+    } catch (error) {
+      toast.error(apiErrorMessage(error));
+    }
   }
-  return <Button type="button" variant="ghost" className={styles.logout} aria-label={isLoading || leaving ? "در حال خروج" : "خروج از حساب"} title="خروج از حساب" disabled={isLoading || leaving} aria-busy={isLoading || leaving} onClick={exit}>
-    {isLoading || leaving ? <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <LogOut className="size-4" aria-hidden="true" />}
-  </Button>;
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      className={styles.logout}
+      aria-label={isLoading || leaving ? "در حال خروج" : "خروج از حساب"}
+      title="خروج از حساب"
+      disabled={isLoading || leaving}
+      aria-busy={isLoading || leaving}
+      onClick={exit}
+    >
+      {isLoading || leaving ? (
+        <LoaderCircle
+          className="size-4 animate-spin motion-reduce:animate-none"
+          aria-hidden="true"
+        />
+      ) : (
+        <LogOut className="size-4" aria-hidden="true" />
+      )}
+    </Button>
+  );
 }

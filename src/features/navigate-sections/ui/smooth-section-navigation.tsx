@@ -28,15 +28,33 @@ export function SmoothSectionNavigation({ rootId }: SmoothSectionNavigationProps
     };
 
     const navigate = (event: MouseEvent) => {
-      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (
+        event.defaultPrevented ||
+        event.button !== 0 ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return;
       if (!(event.target instanceof Element)) return;
       const link = event.target.closest<HTMLAnchorElement>('a[href^="#"]');
-      if (!link || !root.contains(link) || link.hasAttribute("download") || (link.target && link.target !== "_self")) return;
+      if (
+        !link ||
+        !root.contains(link) ||
+        link.hasAttribute("download") ||
+        (link.target && link.target !== "_self")
+      )
+        return;
 
       const hash = link.getAttribute("href");
       if (!hash || hash === "#") return;
       let targetId: string;
-      try { targetId = decodeURIComponent(hash.slice(1)); } catch { return; }
+      try {
+        targetId = decodeURIComponent(hash.slice(1));
+      } catch {
+        return;
+      }
       const target = document.getElementById(targetId);
       if (!target || !root.contains(target)) return;
 
@@ -45,12 +63,19 @@ export function SmoothSectionNavigation({ rootId }: SmoothSectionNavigationProps
       if (location.hash !== hash) history.pushState(null, "", hash);
 
       const margin = Number.parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
-      const top = Math.max(0, Math.min(
-        target.getBoundingClientRect().top + window.scrollY - margin,
-        document.documentElement.scrollHeight - window.innerHeight,
-      ));
+      const top = Math.max(
+        0,
+        Math.min(
+          target.getBoundingClientRect().top + window.scrollY - margin,
+          document.documentElement.scrollHeight - window.innerHeight,
+        ),
+      );
       const distance = Math.abs(top - window.scrollY);
-      if (reduceMotion || window.matchMedia("(prefers-reduced-motion: reduce)").matches || distance < 1) {
+      if (
+        reduceMotion ||
+        window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
+        distance < 1
+      ) {
         window.scrollTo({ top, behavior: "instant" });
         focusTarget(target);
         return;
@@ -69,7 +94,12 @@ export function SmoothSectionNavigation({ rootId }: SmoothSectionNavigationProps
     };
 
     const interruptWithKeyboard = (event: KeyboardEvent) => {
-      if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " ", "Escape"].includes(event.key)) cancelAnimation();
+      if (
+        ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " ", "Escape"].includes(
+          event.key,
+        )
+      )
+        cancelAnimation();
     };
     root.addEventListener("click", navigate);
     window.addEventListener("wheel", cancelAnimation, { passive: true });

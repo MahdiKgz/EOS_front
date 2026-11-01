@@ -12,23 +12,43 @@ export function AuthShell({ children }: Readonly<{ children: React.ReactNode }>)
       <section className={styles.panel} aria-label="حساب کاربری">
         <header className={styles.header}>
           <Link href="/" className={styles.brand} aria-label="EOSNet، صفحه اصلی">
-            <span className={styles.brandMark}><ShieldCheck aria-hidden="true" /></span>
-            <span><strong dir="ltr">EOSNet</strong><small>مدیریت شبکه و امنیت</small></span>
+            <span className={styles.brandMark}>
+              <ShieldCheck aria-hidden="true" />
+            </span>
+            <span>
+              <strong dir="ltr">EOSNet</strong>
+              <small>مدیریت شبکه و امنیت</small>
+            </span>
           </Link>
-          <Link href="/" className={styles.homeLink} aria-label="بازگشت به صفحه اصلی"><ArrowUpRight aria-hidden="true" /></Link>
+          <Link href="/" className={styles.homeLink} aria-label="بازگشت به صفحه اصلی">
+            <ArrowUpRight aria-hidden="true" />
+          </Link>
         </header>
         <main className={styles.formContent}>{children}</main>
         <footer className={styles.footer}>پایش شبکه و مدیریت فرمان‌ها در یک محیط</footer>
       </section>
       <aside className={styles.showcase} aria-label="آشنایی با سامانه">
-        <Image src={background} alt="" fill sizes="(min-width: 1280px) 70vw, 1px" className={styles.background} />
+        <Image
+          src={background}
+          alt=""
+          fill
+          sizes="(min-width: 1280px) 70vw, 1px"
+          className={styles.background}
+        />
         <div className={styles.overlay} />
         <div className={styles.showcaseTop}>
-          <span className={styles.productLabel}><span /> سامانه مدیریت شبکه و امنیت</span>
-          <span dir="ltr" className={styles.wordmark}>EOSNET</span>
+          <span className={styles.productLabel}>
+            <span /> سامانه مدیریت شبکه و امنیت
+          </span>
+          <span dir="ltr" className={styles.wordmark}>
+            EOSNET
+          </span>
         </div>
         <AuthShowcase />
-        <div className={styles.showcaseBottom}><span>اطلاعات شبکه، تصمیم‌های روشن‌تر</span><span dir="ltr">EOSNet / Network Operations</span></div>
+        <div className={styles.showcaseBottom}>
+          <span>اطلاعات شبکه، تصمیم‌های روشن‌تر</span>
+          <span dir="ltr">EOSNet / Network Operations</span>
+        </div>
       </aside>
     </div>
   );
