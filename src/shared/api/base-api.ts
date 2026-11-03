@@ -1,7 +1,7 @@
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 
 const fetchQuery = fetchBaseQuery({
-  baseUrl: "/api/auth/",
+  baseUrl: "/api/",
   credentials: "same-origin",
   timeout: 25000,
 });
@@ -18,6 +18,6 @@ export const baseApi = createApi({
       window.location.replace("/login");
     return result;
   },
-  tagTypes: ["CurrentUser"],
+  tagTypes: ["CurrentUser", "Devices"],
   endpoints: () => ({}),
 });

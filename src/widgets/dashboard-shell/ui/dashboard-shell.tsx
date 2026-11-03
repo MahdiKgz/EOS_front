@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useId, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import {
   Boxes,
@@ -46,6 +47,7 @@ function Sidebar({
   activeItem,
   onSelect,
 }: SidebarProps) {
+  const pathname = usePathname();
   const layoutGroupId = useId();
   const reduceMotion = useReducedMotion();
   const indicator = (
@@ -57,7 +59,9 @@ function Sidebar({
       transition={reduceMotion ? { duration: 0 } : { duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
     />
   );
-  const [openGroups, setOpenGroups] = useState<string[]>([]);
+  const [openGroups, setOpenGroups] = useState<string[]>(() =>
+    pathname.startsWith("/dashboard/assets") ? ["assets"] : [],
+  );
   function toggleGroup(id: string) {
     onSelect(id);
     setOpenGroups((groups) =>
@@ -110,7 +114,7 @@ function Sidebar({
               href="/dashboard"
               style={itemColor("dashboard")}
               className={`${styles.activeLink} ${styles.navItem} ${activeItem === "dashboard" ? styles.selected : ""}`}
-              aria-current="page"
+              aria-current={pathname === "/dashboard" ? "page" : undefined}
               title={collapsed ? "داشبورد" : undefined}
               onClick={() => {
                 onSelect("dashboard");
@@ -168,10 +172,23 @@ function Sidebar({
                       inert={!open}
                     >
                       {group.items.map((item) => (
-                        <li key={item}>
-                          <button type="button" disabled title="این بخش هنوز در دسترس نیست">
-                            {item}
-                          </button>
+                        <li key={item.title}>
+                          {item.href ? (
+                            <Link
+                              href={item.href}
+                              aria-current={pathname === item.href ? "page" : undefined}
+                              onClick={() => {
+                                onSelect(group.id);
+                                if (mobile) onToggle();
+                              }}
+                            >
+                              {item.title}
+                            </Link>
+                          ) : (
+                            <button type="button" disabled title="این بخش هنوز در دسترس نیست">
+                              {item.title}
+                            </button>
+                          )}
                         </li>
                       ))}
                     </motion.ul>
@@ -217,19 +234,28 @@ function Sidebar({
 }
 
 export function DashboardShell({ user, children }: { user: User; children: React.ReactNode }) {
+  const pathname = usePathname();
   const [panelMode, setPanelMode] = useState<PanelMode | null>(null);
   const [selectingPanel, setSelectingPanel] = useState(user.role === "pl_admin");
   const management = user.role === "pl_admin" && panelMode === "management";
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [activeItem, setActiveItem] = useState("dashboard");
+  const routeSection = pathname.startsWith("/dashboard/assets") ? "assets" : "dashboard";
+  const [navigationSelection, setNavigationSelection] = useState({
+    path: pathname,
+    id: routeSection,
+  });
+  const activeItem = navigationSelection.path === pathname ? navigationSelection.id : routeSection;
+  function setActiveItem(id: string) {
+    setNavigationSelection({ path: pathname, id });
+  }
   const dialog = useRef<HTMLDialogElement>(null);
   const activeGroup = management
     ? undefined
     : dashboardNavigation.find((group) => group.id === activeItem);
   function selectPanel(mode: PanelMode) {
     setPanelMode(mode);
-    setActiveItem("dashboard");
+    setActiveItem(pathname.startsWith("/dashboard/assets") ? "assets" : "dashboard");
     setSelectingPanel(false);
   }
   function openMobile() {
@@ -255,7 +281,13 @@ export function DashboardShell({ user, children }: { user: User; children: React
         <DashboardHeader
           accent={activeGroup?.id ?? "dashboard"}
           user={user}
-          title={management ? "مدیریت سامانه" : (activeGroup?.title ?? "داشبورد")}
+          title={
+            management
+              ? "مدیریت سامانه"
+              : pathname === "/dashboard/assets/devices"
+                ? "تجهیزات"
+                : (activeGroup?.title ?? "داشبورد")
+          }
           icon={activeGroup ? groupIcons[activeGroup.id] : LayoutDashboard}
           mobileOpen={mobileOpen}
           onOpenMenu={openMobile}

@@ -118,3 +118,13 @@ pnpm start
 - `pnpm format:check`: check formatting without changing files.
 - Husky runs `lint-staged` before every commit to format staged files and include the changes in the commit. A formatting failure blocks the commit.
 - `pnpm install` activates the hooks through the `prepare` script.
+
+## Equipment inventory
+
+- `/dashboard/assets`: compact asset overview and inventory.
+- `/dashboard/assets/devices`: searchable, sortable and paginated equipment table.
+- `entities/device` owns RTK Query contracts; `features/manage-device` owns React Hook Form dialogs; route pages remain server components.
+- New equipment uses the reference project's fields (name, vendor, type, host, management port, protocol, environment and tags). Network/server and NVR/DVR registration share a modal with animated tabs.
+- Radix Select powers custom RTL dropdowns with vendor icons, keyboard support and portals inside native modal dialogs.
+- `/api/devices` proxies the protected backend using the HttpOnly session cookie; mutation requests require a matching Origin.
+- A newly registered or reconfigured endpoint remains `unknown`; this inventory flow does not run connectors or verify device credentials.

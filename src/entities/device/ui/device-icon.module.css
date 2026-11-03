@@ -1,0 +1,28 @@
+.icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  --icon-color: var(--primary);
+  color: var(--icon-color);
+  background: color-mix(in srgb, var(--icon-color) 9%, transparent);
+}
+.icon svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 1.8;
+}
+.icon[data-vendor="mikrotik"] {
+  --icon-color: var(--sidebar-actions);
+}
+.icon[data-vendor="fortigate"] {
+  --icon-color: var(--sidebar-security);
+}
+.icon[data-vendor="cisco"] {
+  --icon-color: var(--sidebar-assets);
+}
+.icon[data-vendor="sophos"] {
+  --icon-color: var(--success);
+}

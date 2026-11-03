@@ -187,7 +187,9 @@
   overflow: hidden;
   margin: 0 19px 0 0;
 }
-.submenu button {
+.submenu button,
+.submenu a {
+  display: block;
   width: 100%;
   padding-block: 10px;
   padding-inline-start: 21px;
@@ -203,7 +205,10 @@
 .submenu button:hover,
 .submenu button:focus-visible,
 .submenu button:active,
-.submenu button[aria-current="page"] {
+.submenu button[aria-current="page"],
+.submenu a:hover,
+.submenu a:focus-visible,
+.submenu a[aria-current="page"] {
   border-inline-start-color: var(--nav-accent);
   color: var(--foreground);
 }

@@ -10,9 +10,12 @@ export type RegisterInput = {
 };
 export const userApi = baseApi.injectEndpoints({
   endpoints: (builder) => ({
-    me: builder.query<{ user: User }, void>({ query: () => "me", providesTags: ["CurrentUser"] }),
+    me: builder.query<{ user: User }, void>({
+      query: () => "auth/me",
+      providesTags: ["CurrentUser"],
+    }),
     login: builder.mutation<{ user: User }, { username: string; password: string }>({
-      query: (body) => ({ url: "login", method: "POST", body }),
+      query: (body) => ({ url: "auth/login", method: "POST", body }),
       async onQueryStarted(_args, { dispatch, queryFulfilled }) {
         try {
           const { data } = await queryFulfilled;
@@ -23,7 +26,7 @@ export const userApi = baseApi.injectEndpoints({
       },
     }),
     register: builder.mutation<{ user: User }, RegisterInput>({
-      query: (body) => ({ url: "register", method: "POST", body }),
+      query: (body) => ({ url: "auth/register", method: "POST", body }),
       async onQueryStarted(_args, { dispatch, queryFulfilled }) {
         try {
           const { data } = await queryFulfilled;
@@ -34,13 +37,13 @@ export const userApi = baseApi.injectEndpoints({
       },
     }),
     logout: builder.mutation<{ message: string }, void>({
-      query: () => ({ url: "logout", method: "POST", body: {} }),
+      query: () => ({ url: "auth/logout", method: "POST", body: {} }),
     }),
     forgetPassword: builder.mutation<{ message: string }, { email: string }>({
-      query: (body) => ({ url: "forget-password", method: "POST", body }),
+      query: (body) => ({ url: "auth/forget-password", method: "POST", body }),
     }),
     resetPassword: builder.mutation<{ message: string }, { token: string; password: string }>({
-      query: (body) => ({ url: "reset-password", method: "POST", body }),
+      query: (body) => ({ url: "auth/reset-password", method: "POST", body }),
     }),
   }),
 });
