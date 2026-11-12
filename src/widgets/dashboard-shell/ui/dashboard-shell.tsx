@@ -176,7 +176,13 @@ function Sidebar({
                           {item.href ? (
                             <Link
                               href={item.href}
-                              aria-current={pathname === item.href ? "page" : undefined}
+                              aria-current={
+                                pathname === item.href ||
+                                (item.href !== "/dashboard/assets" &&
+                                  pathname.startsWith(item.href + "/"))
+                                  ? "page"
+                                  : undefined
+                              }
                               onClick={() => {
                                 onSelect(group.id);
                                 if (mobile) onToggle();
@@ -286,7 +292,13 @@ export function DashboardShell({ user, children }: { user: User; children: React
               ? "مدیریت سامانه"
               : pathname === "/dashboard/assets/devices"
                 ? "تجهیزات"
-                : (activeGroup?.title ?? "داشبورد")
+                : pathname === "/dashboard/assets/backups"
+                  ? "بک‌آپ تجهیزات"
+                  : pathname.startsWith("/dashboard/assets/vendors")
+                    ? "وندورها"
+                    : pathname === "/dashboard/assets/cameras"
+                      ? "دوربین‌ها و ضبط‌کننده‌ها"
+                      : (activeGroup?.title ?? "داشبورد")
           }
           icon={activeGroup ? groupIcons[activeGroup.id] : LayoutDashboard}
           mobileOpen={mobileOpen}

@@ -1,10 +1,27 @@
 "use client";
 import { useRef, useState } from "react";
-import { type DeviceCredential, useDeviceCredentialsQuery } from "@/entities/device";
+import { useForm } from "react-hook-form";
+import { KeyRound, LoaderCircle } from "lucide-react";
+import toast from "react-hot-toast";
+import { apiErrorMessage } from "@/shared/api/error-message";
+import {
+  type DeviceCredential,
+  useDeviceCredentialsQuery,
+  useSaveSshCredentialMutation,
+  useDeleteSshCredentialMutation,
+} from "@/entities/device";
 import { AnimatedDialog } from "@/shared/ui/animated-dialog";
 import { Button } from "@/shared/ui/button";
 import { Select } from "@/shared/ui/select";
 import { Input } from "@/shared/ui/input";
+
+type CredentialFields = {
+  libraryName: string;
+  libraryUsername: string;
+  libraryHostKey: string;
+  libraryPassword: string;
+  libraryPrivateKey: string;
+};
 
 export function CredentialLibrary({
   onSaved,
@@ -27,14 +44,33 @@ export function CredentialLibrary({
   const [pendingDelete, setPendingDelete] = useState<DeviceCredential>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const editor = useRef<HTMLDivElement>(null);
+  const form = useForm<CredentialFields>({
+    defaultValues: {
+      libraryName: "",
+      libraryUsername: "",
+      libraryHostKey: "",
+      libraryPassword: "",
+      libraryPrivateKey: "",
+    },
+  });
+  const [save] = useSaveSshCredentialMutation(),
+    [removeCredential] = useDeleteSshCredentialMutation();
+  function edit(item: DeviceCredential | null) {
+    setEditing(item);
+    setMethod("password");
+    form.reset({
+      libraryName: item?.name ?? "",
+      libraryUsername: item?.username ?? "",
+      libraryHostKey: "",
+      libraryPassword: "",
+      libraryPrivateKey: "",
+    });
+  }
   const lock = useRef(false);
 
   async function mutate(remove?: DeviceCredential) {
     if (lock.current) return;
-    const value = (name: string) =>
-      editor.current?.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${name}"]`)
-        ?.value ?? "";
+    const value = (name: keyof CredentialFields) => form.getValues(name) ?? "";
     const body = {
       operation: "verify",
       name: value("libraryName").trim(),
@@ -62,27 +98,21 @@ export function CredentialLibrary({
     setError("");
     try {
       const id = remove?.id ?? editing?.id;
-      const response = await fetch(`/api/devices/credentials${id ? `/${id}` : ""}`, {
-        method: remove ? "DELETE" : id ? "PUT" : "POST",
-        ...(remove
-          ? {}
-          : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
-      });
-      const result = await response.json();
-      if (!response.ok)
-        throw new Error(
-          typeof result.message === "string" ? result.message : "اطلاعات اعتبارنامه را بررسی کنید.",
-        );
-      await refetch();
+      const result = remove
+        ? await removeCredential(remove.id).unwrap()
+        : await save({ id, body: { ...body, operation: "verify" } }).unwrap();
       if (remove) {
         onDeleted?.(remove.id);
         setPendingDelete(undefined);
+        toast.success("اعتبارنامه حذف شد.");
       } else {
         setEditing(undefined);
-        onSaved?.(result.id);
+        if ("id" in result) onSaved?.(result.id);
+        form.reset();
+        toast.success("اعتبارنامه ذخیره شد.");
       }
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "عملیات انجام نشد.");
+      setError(apiErrorMessage(failure));
     } finally {
       lock.current = false;
       setBusy(false);
@@ -91,14 +121,28 @@ export function CredentialLibrary({
   }
 
   return (
-    <section aria-label="مدیریت اعتبارنامه‌ها" className="grid gap-3 text-sm">
+    <section
+      aria-label="مدیریت اعتبارنامه‌ها"
+      className="grid gap-3 text-sm"
+      onKeyDown={(event) => {
+        if (
+          event.key === "Enter" &&
+          event.target instanceof HTMLInputElement &&
+          editing !== undefined
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!busy && !disabled) void form.handleSubmit(() => mutate())();
+        }
+      }}
+    >
       <Button
         type="button"
         variant="outline"
         className="w-fit"
         disabled={busy || disabled}
         onClick={() => {
-          setEditing(null);
+          edit(null);
           setPendingDelete(undefined);
           setError("");
         }}
@@ -125,7 +169,7 @@ export function CredentialLibrary({
             variant="outline"
             disabled={busy || disabled}
             onClick={() => {
-              setEditing(item);
+              edit(item);
               setPendingDelete(undefined);
               setError("");
             }}
@@ -171,22 +215,16 @@ export function CredentialLibrary({
         </div>
       )}
       {editing !== undefined && (
-        <div key={editing?.id ?? "new"} ref={editor} className="grid gap-2 rounded-lg border p-3">
+        <div key={editing?.id ?? "new"} className="grid gap-2 rounded-lg border p-3">
           <label>
             نام اعتبارنامه
-            <Input
-              name="libraryName"
-              defaultValue={editing?.name}
-              maxLength={120}
-              disabled={busy || disabled}
-            />
+            <Input {...form.register("libraryName")} maxLength={120} disabled={busy || disabled} />
           </label>
           <label>
             نام کاربری SSH
             <Input
-              name="libraryUsername"
+              {...form.register("libraryUsername")}
               dir="ltr"
-              defaultValue={editing?.username}
               maxLength={64}
               disabled={busy || disabled}
             />
@@ -194,7 +232,7 @@ export function CredentialLibrary({
           <label>
             کلید عمومی میزبان
             <Input
-              name="libraryHostKey"
+              {...form.register("libraryHostKey")}
               dir="ltr"
               maxLength={2048}
               placeholder="ssh-ed25519 AAAA…"
@@ -209,8 +247,8 @@ export function CredentialLibrary({
               onValueChange={setMethod}
               disabled={busy || disabled}
               options={[
-                { value: "password", label: "گذرواژه" },
-                { value: "key", label: "کلید خصوصی" },
+                { value: "password", label: "گذرواژه", icon: <KeyRound size={16} /> },
+                { value: "key", label: "کلید خصوصی", icon: <KeyRound size={16} /> },
               ]}
             />
           </label>
@@ -219,7 +257,7 @@ export function CredentialLibrary({
               گذرواژه SSH
               <Input
                 type="password"
-                name="libraryPassword"
+                {...form.register("libraryPassword")}
                 dir="ltr"
                 maxLength={1024}
                 autoComplete="new-password"
@@ -231,7 +269,7 @@ export function CredentialLibrary({
               کلید خصوصی بدون عبارت عبور
               <textarea
                 className="rounded-md border bg-background p-2"
-                name="libraryPrivateKey"
+                {...form.register("libraryPrivateKey")}
                 dir="ltr"
                 rows={3}
                 maxLength={12000}
@@ -245,8 +283,9 @@ export function CredentialLibrary({
             type="button"
             className="w-fit"
             disabled={busy || disabled}
-            onClick={() => void mutate()}
+            onClick={() => void form.handleSubmit(() => mutate())()}
           >
+            {busy && <LoaderCircle size={16} className="animate-spin" />}
             {busy ? "در حال ذخیره…" : "ذخیره اعتبارنامه"}
           </Button>
         </div>

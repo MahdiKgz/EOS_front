@@ -13,6 +13,7 @@ export const deviceApi = baseApi.injectEndpoints({
     deviceCompanies: builder.query<DeviceCompany[], void>({ query: () => "devices/companies" }),
     deviceCredentials: builder.query<DeviceCredential[], void>({
       query: () => "devices/credentials",
+      providesTags: ["Devices"],
     }),
     devices: builder.query<DeviceList, DeviceListQuery>({
       query: (params) => ({ url: "devices", params }),
@@ -22,11 +23,26 @@ export const deviceApi = baseApi.injectEndpoints({
       query: (id) => `devices/${id}`,
       providesTags: ["Devices"],
     }),
+    deviceInventoryEvents: builder.query<
+      {
+        id: string;
+        action: "archived" | "restored" | "transferred";
+        actorName: string;
+        occurredAt: string;
+      }[],
+      string
+    >({
+      query: (id) => `devices/${id}/inventory-events`,
+      providesTags: ["Devices"],
+    }),
     deviceHistory: builder.query<DeviceCheck[], string>({
       query: (id) => `devices/${id}/history`,
       providesTags: ["Devices"],
     }),
-    createDevice: builder.mutation<Device, DeviceInput>({
+    createDevice: builder.mutation<
+      Device,
+      DeviceInput & { verificationToken?: string; draftRevision?: string }
+    >({
       query: (body) => ({ url: "devices", method: "POST", body }),
       invalidatesTags: ["Devices"],
     }),
@@ -47,6 +63,10 @@ export const deviceApi = baseApi.injectEndpoints({
       query: (id) => ({ url: `devices/${id}/test-connection`, method: "POST" }),
       invalidatesTags: (result) => (result ? ["Devices"] : []),
     }),
+    restoreDevice: builder.mutation<{ message: string }, string>({
+      query: (id) => ({ url: `devices/${id}/restore`, method: "POST" }),
+      invalidatesTags: (result) => (result ? ["Devices"] : []),
+    }),
     archiveDevice: builder.mutation<{ message: string }, string>({
       query: (id) => ({ url: `devices/${id}`, method: "DELETE" }),
       invalidatesTags: ["Devices"],
@@ -59,8 +79,10 @@ export const {
   useDeviceCredentialsQuery,
   useDeviceQuery,
   useDeviceHistoryQuery,
+  useDeviceInventoryEventsQuery,
   useCreateDeviceMutation,
   useUpdateDeviceMutation,
   useArchiveDeviceMutation,
+  useRestoreDeviceMutation,
   useTestDeviceConnectionMutation,
 } = deviceApi;

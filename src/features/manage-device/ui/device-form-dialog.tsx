@@ -7,12 +7,18 @@ import toast from "react-hot-toast";
 import { z } from "zod";
 import {
   DeviceIcon,
+  deviceApiKind,
   deviceTypeLabels,
   environmentLabels,
   type Device,
   type DeviceInput,
   type DeviceType,
   useCreateDeviceMutation,
+  useRegistrationDraftQuery,
+  useSaveRegistrationDraftMutation,
+  useDeleteRegistrationDraftMutation,
+  useVerifyDraftConnectionMutation,
+  type RecorderConnectionInput,
   useDeviceCompaniesQuery,
   useDeviceCredentialsQuery,
   useUpdateDeviceMutation,
@@ -21,6 +27,9 @@ import { apiErrorMessage } from "@/shared/api/error-message";
 import { AnimatedDialog } from "@/shared/ui/animated-dialog";
 import { Select } from "@/shared/ui/select";
 import { Button } from "@/shared/ui/button";
+import { CiscoAccessFields, defaultCiscoAccess } from "./cisco-access-fields";
+import { RecorderDiscovery } from "./recorder-discovery";
+import { ApiCredentialPicker } from "./api-credential-picker";
 import { CredentialLibrary } from "./credential-library";
 import styles from "./device-form.module.css";
 type FormValues = Omit<DeviceInput, "tags"> & { tagsText: string };
@@ -29,16 +38,18 @@ const vendors: Record<DeviceType, string> = {
   esxi: "VMware",
   mikrotik: "MikroTik",
   fortigate: "Fortinet",
+  cisco: "Cisco",
   pfsense: "Netgate",
   generic_syslog_source: "Generic",
   generic_firewall: "Generic",
   nvr: "Hikvision",
   dvr: "Dahua",
+  camera: "Hikvision",
 };
 const families = [
   { value: "linux", label: "Linux", description: "سرور Linux با SSH", type: "linux_edge" },
-  { value: "cisco", label: "Cisco", description: "Cisco IOS / IOS-XE", type: "generic_firewall" },
   { value: "fortinet", label: "FortiGate", description: "فایروال FortiGate", type: "fortigate" },
+  { value: "cisco", label: "Cisco", description: "Cisco IOS / IOS-XE", type: "cisco" },
   { value: "mikrotik", label: "MikroTik", description: "MikroTik RouterOS", type: "mikrotik" },
   {
     value: "sophos",
@@ -58,11 +69,15 @@ const families = [
 function deviceInput(values: FormValues): DeviceInput {
   const { tagsText, ...rest } = values;
   return {
+    ...(rest.type === "cisco" && rest.protocol === "ssh" && rest.ciscoProfile
+      ? { ciscoProfile: rest.ciscoProfile }
+      : {}),
     name: rest.name.trim(),
     vendor: rest.vendor.trim(),
     type: rest.type,
     host: rest.host.trim(),
     managementPort: rest.managementPort,
+    location: rest.location?.trim() || null,
     protocol: rest.protocol,
     environment: rest.environment,
     tags: [
@@ -78,23 +93,100 @@ function deviceInput(values: FormValues): DeviceInput {
 
 const steps = ["مشخصات و روش اتصال", "اعتبارنامه و تست اتصال", "بازبینی و ثبت نهایی"] as const;
 
-export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose: () => void }) {
+const draftSchema = z.object({
+  expiresAt: z.number(),
+  revision: z.string().uuid().optional(),
+  companyId: z.string().max(64),
+  category: z.enum(["network", "recorder"]),
+  values: z.object({
+    ciscoProfile: z
+      .object({
+        compatibilityProfile: z.enum(["modern", "legacy_cisco"]),
+        enableCredentialId: z.string().uuid().nullable().optional(),
+      })
+      .optional(),
+    name: z.string().max(120),
+    vendor: z.string().max(80),
+    type: z.custom<DeviceType>(
+      (value) => typeof value === "string" && Object.hasOwn(deviceTypeLabels, value),
+    ),
+    host: z.string().max(253),
+    managementPort: z.number().int().min(1).max(65535),
+    location: z.string().max(160).nullable().optional(),
+    protocol: z.enum(["ssh", "api", "syslog", "agent"]),
+    environment: z.enum(["production", "staging", "lab"]),
+    tagsText: z.string().max(4096),
+  }),
+});
+type RegistrationDraft = z.infer<typeof draftSchema>;
+
+function readDraft(key: string | undefined) {
+  if (!key || typeof window === "undefined") return undefined;
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return undefined;
+    const result = draftSchema.safeParse(JSON.parse(raw));
+    return result.success && result.data.expiresAt > Date.now() ? result.data : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function DeviceFormDialog({
+  device,
+  onClose,
+  draftOwnerId,
+  initialCategory = "network",
+  initialDevice,
+  initialCompanyId,
+}: {
+  device?: Device;
+  onClose: () => void;
+  draftOwnerId?: string;
+  initialCategory?: "network" | "recorder";
+  initialDevice?: Pick<DeviceInput, "type" | "vendor" | "protocol" | "managementPort">;
+  initialCompanyId?: string;
+}) {
+  const draftKey = !device && draftOwnerId ? `eosnet:device-draft:v1:${draftOwnerId}` : undefined;
+  const [localDraft, setLocalDraft] = useState(() => readDraft(draftKey));
+  const [dismissedRevision, setDismissedRevision] = useState<string>();
+  const [draftBusy, setDraftBusy] = useState(false);
+  const resumedRevision = useRef<string>(undefined);
+  const remoteDraft = useRegistrationDraftQuery(undefined, { skip: !draftKey });
+  const [saveRemoteDraft] = useSaveRegistrationDraftMutation(),
+    [deleteRemoteDraft] = useDeleteRegistrationDraftMutation();
+  const parsedRemoteDraft = draftSchema.safeParse(remoteDraft.data?.draft);
+  const pendingRemoteDraft =
+    parsedRemoteDraft.success && parsedRemoteDraft.data.revision !== dismissedRevision
+      ? parsedRemoteDraft.data
+      : undefined;
+  const pendingDraft = pendingRemoteDraft ?? localDraft;
   const [open, setOpen] = useState(true),
     [category, setCategory] = useState<"network" | "recorder">(
-      device && ["nvr", "dvr"].includes(device.type) ? "recorder" : "network",
+      device
+        ? ["nvr", "dvr", "camera"].includes(device.type)
+          ? "recorder"
+          : "network"
+        : initialCategory,
     );
   const [step, setStep] = useState(0);
-  const [review, setReview] = useState<{ device: DeviceInput; verified: boolean }>();
+  const [review, setReview] = useState<{
+    device: DeviceInput;
+    verified: boolean;
+    verificationToken?: string;
+    identity?: Record<string, string>;
+  }>();
   const [testing, setTesting] = useState(false);
-  const [companyId, setCompanyId] = useState(device?.companyId ?? "");
+  const [companyId, setCompanyId] = useState(device?.companyId ?? initialCompanyId ?? "");
   const [credentialId, setCredentialId] = useState("");
+  const [apiCredentialId, setApiCredentialId] = useState(device?.apiCredentialId ?? "");
   const [credentialMode, setCredentialMode] = useState<"existing" | "new" | "manage">("existing");
   const [credentialBusy, setCredentialBusy] = useState(false);
-  const companies = useDeviceCompaniesQuery(undefined, { skip: !!device });
+  const companies = useDeviceCompaniesQuery();
   const credentials = useDeviceCredentialsQuery(undefined, { skip: !!device });
   const selectedCompany =
     companies.data?.find((item) => item.id === companyId) ??
-    (!companyId ? companies.data?.[0] : undefined);
+    (!companyId && !device ? companies.data?.[0] : undefined);
   const [error, setError] = useState("");
   const lock = useRef(false);
   const formId = useId();
@@ -103,6 +195,7 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
   const [update, { isLoading: updating }] = useUpdateDeviceMutation();
   const {
     register,
+    reset,
     control,
     handleSubmit,
     getValues,
@@ -114,30 +207,58 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
     defaultValues: device
       ? { ...device, vendor: device.vendor.toLowerCase(), tagsText: device.tags.join(", ") }
       : {
+          ciscoProfile: defaultCiscoAccess,
           name: "",
-          vendor: "linux",
-          type: "linux_edge",
+          vendor: initialCategory === "recorder" ? "hikvision" : "linux",
+          type: initialCategory === "recorder" ? "nvr" : "linux_edge",
           host: "",
-          managementPort: 22,
-          protocol: "ssh",
+          managementPort: initialCategory === "recorder" ? 80 : 22,
+          location: "",
+          protocol: initialCategory === "recorder" ? "api" : "ssh",
           environment: "lab",
           tagsText: "",
+          ...initialDevice,
         },
   });
   const type = useWatch({ control, name: "type" });
   const protocol = useWatch({ control, name: "protocol" });
-  const isRecorder = (type === "nvr" || type === "dvr") && protocol === "api";
-  const canTestSsh = type === "linux_edge" && protocol === "ssh";
-  const canTest = canTestSsh || isRecorder;
-  const recorderFields = useRef<HTMLDivElement>(null);
+  const vendor = useWatch({ control, name: "vendor" });
+  const isRecorder = ["nvr", "dvr", "camera"].includes(type) && protocol === "api";
+  const canTestSsh =
+    ["linux_edge", "mikrotik", "pfsense", "esxi", "fortigate", "cisco"].includes(type) &&
+    protocol === "ssh";
+  const canTestApi = !!deviceApiKind({ type, vendor, protocol });
+  const canTest = canTestSsh || isRecorder || canTestApi;
+  const recorderForm = useForm<{
+    username: string;
+    password: string;
+    https: boolean;
+    saveConnection: boolean;
+    onvifPath: string;
+    rtspPath: string;
+  }>({
+    defaultValues: {
+      username: "",
+      password: "",
+      https: false,
+      saveConnection: false,
+      onvifPath: "/onvif/device_service",
+      rtspPath: "",
+    },
+  });
+  const [verifyDraft] = useVerifyDraftConnectionMutation();
   const formBusy = creating || updating || isSubmitting || testing;
-  const busy = formBusy || credentialBusy;
+  const [discovering, setDiscovering] = useState(false);
+  const [recorderMode, setRecorderMode] =
+    useState<NonNullable<RecorderConnectionInput["mode"]>>("auto");
+  const busy = formBusy || credentialBusy || discovering || draftBusy;
 
   function draftInput(values: FormValues): DeviceInput {
     return {
       ...deviceInput(values),
+      apiCredentialId: canTestApi && apiCredentialId ? apiCredentialId : undefined,
       ...(device
-        ? {}
+        ? { companyId: selectedCompany?.id }
         : {
             companyId: selectedCompany?.id,
             accessRoute: "direct",
@@ -181,22 +302,25 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
       return;
     }
     if (!canTest) return;
+    if (canTestApi && !draft.apiCredentialId) {
+      setError("اعتبارنامهٔ API را انتخاب کنید یا یک مورد بسازید.");
+      return;
+    }
     if (canTestSsh && !draft.credentialId) {
       setError("اعتبارنامه موجود را انتخاب کنید یا یک اعتبارنامه بسازید.");
       return;
     }
-    const recorder = isRecorder
+    const connection = recorderForm.getValues();
+    const recorder: RecorderConnectionInput | undefined = isRecorder
       ? {
-          username:
-            recorderFields.current
-              ?.querySelector<HTMLInputElement>('[name="recorderUsername"]')
-              ?.value.trim() ?? "",
-          password:
-            recorderFields.current?.querySelector<HTMLInputElement>('[name="recorderPassword"]')
-              ?.value ?? "",
-          https:
-            recorderFields.current?.querySelector<HTMLInputElement>('[name="recorderHttps"]')
-              ?.checked ?? false,
+          username: connection.username.trim(),
+          password: connection.password,
+          https: !["dvrip", "rtsp"].includes(recorderMode ?? "") && connection.https,
+          mode: recorderMode,
+          onvifPath: ["onvif", "auto"].includes(recorderMode ?? "")
+            ? connection.onvifPath.trim()
+            : undefined,
+          rtspPath: recorderMode === "rtsp" ? connection.rtspPath.trim() : undefined,
         }
       : undefined;
     if (recorder && (!recorder.username || !recorder.password)) {
@@ -206,25 +330,26 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
     lock.current = true;
     setTesting(true);
     try {
-      const response = await fetch("/api/devices/draft-connection", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          device: draft,
-          recorder,
-        }),
+      const request = verifyDraft({
+        device: draft,
+        recorder,
+        saveRecorderConnection: recorder ? connection.saveConnection : undefined,
       });
-      const result = await response.json();
-      if (!response.ok || result.verified !== true)
-        throw new Error(
-          typeof result.message === "string"
-            ? result.message
-            : "تست اتصال انجام نشد. اعتبارنامه را بررسی کنید.",
-        );
-      setReview({ device: draft, verified: true });
+      let result;
+      try {
+        result = await request.unwrap();
+      } finally {
+        request.reset();
+      }
+      setReview({
+        device: draft,
+        verified: true,
+        identity: result.identity,
+        verificationToken: result.verificationToken,
+      });
       setStep(2);
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "تست اتصال انجام نشد.");
+      setError(apiErrorMessage(failure));
     } finally {
       lock.current = false;
       setTesting(false);
@@ -240,9 +365,10 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
     chooseType(next === "recorder" ? "nvr" : "linux_edge");
   }
   function chooseType(type: DeviceType) {
+    setRecorderMode(type === "camera" ? "onvif" : "auto");
     setValue("type", type, { shouldValidate: true });
     setValue("vendor", vendors[type].toLowerCase(), { shouldValidate: true });
-    const protocol = ["nvr", "dvr", "esxi"].includes(type)
+    const protocol = ["nvr", "dvr", "camera", "esxi"].includes(type)
       ? "api"
       : type === "generic_syslog_source"
         ? "syslog"
@@ -250,7 +376,7 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
     setValue("protocol", protocol, { shouldValidate: true });
     setValue(
       "managementPort",
-      type === "nvr" || type === "dvr"
+      ["nvr", "dvr", "camera"].includes(type)
         ? 80
         : protocol === "api"
           ? 443
@@ -262,6 +388,85 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
       },
     );
   }
+  function clearLocalDraft() {
+    if (!draftKey) return;
+    try {
+      sessionStorage.removeItem(draftKey);
+    } catch {
+      // Older local drafts may be unavailable.
+    }
+  }
+
+  async function deleteDraft(revision: string) {
+    const request = deleteRemoteDraft(revision);
+    try {
+      await request.unwrap();
+    } finally {
+      request.reset();
+    }
+  }
+
+  async function discardDraft() {
+    if (draftBusy || lock.current) return;
+    setDraftBusy(true);
+    try {
+      if (pendingDraft?.revision) await deleteDraft(pendingDraft.revision);
+      clearLocalDraft();
+      setDismissedRevision(pendingDraft?.revision);
+      setLocalDraft(undefined);
+    } catch {
+      toast.error("حذف پیش‌نویس انجام نشد.");
+    } finally {
+      setDraftBusy(false);
+    }
+  }
+
+  async function saveDraft() {
+    if (!draftKey || draftBusy || lock.current) return;
+    const draft = draftSchema.safeParse({
+      category,
+      companyId: selectedCompany?.id ?? companyId,
+      expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+      values: getValues(),
+    });
+    if (!draft.success) {
+      toast.error("برای ذخیرهٔ پیش‌نویس، مشخصات و پورت تجهیز را بررسی کنید.");
+      return;
+    }
+    setDraftBusy(true);
+    try {
+      const { category, companyId, values } = draft.data;
+      const request = saveRemoteDraft({ category, companyId, values });
+      try {
+        await request.unwrap();
+      } finally {
+        request.reset();
+      }
+      clearLocalDraft();
+      toast.success("پیش‌نویس در حساب شما ذخیره شد.");
+      setOpen(false);
+    } catch {
+      toast.error("ذخیرهٔ پیش‌نویس انجام نشد. دوباره تلاش کنید.");
+    } finally {
+      setDraftBusy(false);
+    }
+  }
+
+  function resumeDraft(draft: RegistrationDraft) {
+    resumedRevision.current = draft.revision;
+    reset(draft.values);
+    setRecorderMode(draft.values.type === "camera" ? "onvif" : "auto");
+    setCategory(draft.category);
+    setCompanyId(draft.companyId);
+    setCredentialId("");
+    setApiCredentialId("");
+    setReview(undefined);
+    setError("");
+    setStep(0);
+    setDismissedRevision(draft.revision);
+    setLocalDraft(undefined);
+  }
+
   async function submit(values: FormValues) {
     if (testing || credentialBusy || lock.current || (!device && (step !== 2 || !review))) return;
     lock.current = true;
@@ -269,7 +474,14 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
     const body = draftInput(values);
     try {
       if (device) await update({ id: device.id, body }).unwrap();
-      else await create(body).unwrap();
+      else {
+        await create({
+          ...body,
+          verificationToken: review?.verificationToken,
+          draftRevision: resumedRevision.current,
+        }).unwrap();
+        clearLocalDraft();
+      }
       toast.success(device ? "اطلاعات تجهیز به‌روز شد." : "تجهیز در فهرست ثبت شد.");
       setOpen(false);
     } catch (err) {
@@ -328,12 +540,40 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
               {busy ? "در حال ذخیره…" : device ? "ذخیره تغییرات" : "ثبت نهایی تجهیز"}
             </Button>
           )}
+          {draftKey && (
+            <Button
+              type="button"
+              variant="outline"
+              disabled={busy}
+              onClick={() => void saveDraft()}
+            >
+              ذخیرهٔ پیش‌نویس
+            </Button>
+          )}
           <Button type="button" variant="outline" disabled={busy} onClick={() => setOpen(false)}>
             انصراف
           </Button>
         </div>
       }
     >
+      {pendingDraft && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border p-3 text-sm">
+          <span className="me-auto">
+            پیش‌نویس {pendingDraft.values.name || "تجهیز"} برای ادامه موجود است.
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy}
+            onClick={() => resumeDraft(pendingDraft)}
+          >
+            ادامهٔ پیش‌نویس
+          </Button>
+          <Button type="button" variant="ghost" disabled={busy} onClick={() => void discardDraft()}>
+            حذف پیش‌نویس
+          </Button>
+        </div>
+      )}
       <form
         id={formId}
         onSubmit={(event) => {
@@ -349,7 +589,7 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
                 {(
                   [
                     ["network", "تجهیز شبکه / سرور", Network],
-                    ["recorder", "ضبط‌کننده NVR / DVR", Server],
+                    ["recorder", "دوربین / NVR / DVR", Server],
                   ] as const
                 ).map(([key, label, Icon]) => (
                   <button
@@ -419,51 +659,56 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
               className={!device ? styles.stepContent : undefined}
               hidden={!device && step !== 0}
             >
-              {!device && (
-                <div className={styles.grid + " mb-4"}>
-                  <div className="flex flex-col gap-2 text-xs">
-                    <div className="relative pe-6">
-                      شرکت مالک تجهیز
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="absolute end-0 top-1/2 size-5 -translate-y-1/2 p-0"
-                        disabled={busy || companies.isFetching}
-                        aria-label="دریافت دوباره شرکت‌ها"
-                        title="دریافت دوباره شرکت‌ها"
-                        onClick={() => void companies.refetch()}
-                      >
-                        <RefreshCw
-                          size={12}
-                          aria-hidden="true"
-                          className={
-                            companies.isFetching
-                              ? "animate-spin motion-reduce:animate-none"
-                              : undefined
-                          }
-                        />
-                      </Button>
-                    </div>
-                    <Select
-                      label="شرکت مالک تجهیز"
-                      options={(companies.data ?? []).map((item) => ({
-                        value: item.id,
-                        label: item.name,
-                      }))}
-                      value={selectedCompany?.id ?? ""}
-                      onValueChange={(id) => {
-                        setCompanyId(id);
-                        setReview(undefined);
-                      }}
-                      disabled={companies.isFetching || busy}
-                      placeholder="انتخاب شرکت"
-                      emptyMessage={
-                        companies.error
-                          ? "دریافت شرکت‌ها انجام نشد."
-                          : "شرکتی در فضای کاری ثبت نشده است."
-                      }
-                    />
+              <div className={styles.grid + " mb-4"}>
+                <div className="flex flex-col gap-2 text-xs">
+                  <div className="relative pe-6">
+                    شرکت مالک تجهیز
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="absolute end-0 top-1/2 size-5 -translate-y-1/2 p-0"
+                      disabled={busy || companies.isFetching}
+                      aria-label="دریافت دوباره شرکت‌ها"
+                      title="دریافت دوباره شرکت‌ها"
+                      onClick={() => void companies.refetch()}
+                    >
+                      <RefreshCw
+                        size={12}
+                        aria-hidden="true"
+                        className={
+                          companies.isFetching
+                            ? "animate-spin motion-reduce:animate-none"
+                            : undefined
+                        }
+                      />
+                    </Button>
                   </div>
+                  <Select
+                    label="شرکت مالک تجهیز"
+                    options={(companies.data ?? []).map((item) => ({
+                      value: item.id,
+                      label: item.name,
+                    }))}
+                    value={selectedCompany?.id ?? ""}
+                    onValueChange={(id) => {
+                      setCompanyId(id);
+                      setReview(undefined);
+                    }}
+                    disabled={companies.isFetching || busy}
+                    placeholder="انتخاب شرکت"
+                    emptyMessage={
+                      companies.error
+                        ? "دریافت شرکت‌ها انجام نشد."
+                        : "شرکتی در فضای کاری ثبت نشده است."
+                    }
+                  />
+                </div>
+                {device && selectedCompany && selectedCompany.id !== device.companyId && (
+                  <p className={styles.optional}>
+                    با تغییر شرکت، اتصال ذخیره‌شده و تأیید قبلی پاک می‌شوند.
+                  </p>
+                )}
+                {!device && (
                   <label>
                     مسیر دسترسی
                     <Select
@@ -479,8 +724,8 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
                       اتصال از طریق VPN هنوز در این نسخه فعال نیست.
                     </span>
                   </label>
-                </div>
-              )}
+                )}
+              </div>
               <div className={styles.grid}>
                 <label>
                   نام تجهیز
@@ -510,8 +755,8 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
                         options={Object.entries(deviceTypeLabels)
                           .filter(([key]) =>
                             category === "recorder"
-                              ? ["nvr", "dvr"].includes(key)
-                              : !["nvr", "dvr"].includes(key),
+                              ? ["nvr", "dvr", "camera"].includes(key)
+                              : !["nvr", "dvr", "camera"].includes(key),
                           )
                           .map(([value, label]) => ({
                             value,
@@ -574,7 +819,13 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
                           options={available}
                           onValueChange={(value) => {
                             const family = families.find((item) => item.value === value);
-                            if (category === "network" && family) chooseType(family.type);
+                            if (category === "network" && family) {
+                              chooseType(family.type);
+                              if (value === "sophos") {
+                                setValue("protocol", "api", { shouldValidate: true });
+                                setValue("managementPort", 4444, { shouldValidate: true });
+                              }
+                            }
                             field.onChange(value);
                           }}
                         />
@@ -602,6 +853,22 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
                     )}
                   />
                 </label>
+                {!device && isRecorder && (
+                  <div className={styles.wide}>
+                    <RecorderDiscovery
+                      key={selectedCompany?.id}
+                      companyId={selectedCompany?.id}
+                      onBusy={setDiscovering}
+                      onSelect={({ host, port, https }) => {
+                        setValue("host", host, { shouldValidate: true });
+                        setValue("managementPort", port, { shouldValidate: true });
+                        recorderForm.setValue("https", https);
+                        setRecorderMode("onvif");
+                        setReview(undefined);
+                      }}
+                    />
+                  </div>
+                )}
                 <label className={styles.wide}>
                   آدرس IP یا نام میزبان
                   <input
@@ -646,10 +913,12 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
                           setValue(
                             "managementPort",
                             (
-                              { ssh: 22, api: 443, syslog: 514, agent: 8443 } as Record<
-                                string,
-                                number
-                              >
+                              {
+                                ssh: 22,
+                                api: /^sophos(?:[ _-]firewall)?$/i.test(vendor) ? 4444 : 443,
+                                syslog: 514,
+                                agent: 8443,
+                              } as Record<string, number>
                             )[value],
                             { shouldValidate: true },
                           );
@@ -683,6 +952,19 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
                   )}
                 </label>
                 <label className={styles.wide}>
+                  محل نصب <span className={styles.optional}>اختیاری</span>
+                  <input
+                    placeholder="مثلاً ورودی ساختمان"
+                    {...register("location", {
+                      maxLength: { value: 160, message: "حداکثر ۱۶۰ کاراکتر مجاز است." },
+                    })}
+                    aria-invalid={!!errors.location}
+                  />
+                  {errors.location && (
+                    <span className={styles.error}>{errors.location.message}</span>
+                  )}
+                </label>
+                <label className={styles.wide}>
                   برچسب‌ها <span className={styles.optional}>اختیاری؛ با ویرگول جدا کنید</span>
                   <input
                     placeholder="مرکزی، طبقه اول"
@@ -709,19 +991,20 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
             {!device && (
               <div className={styles.stepContent} hidden={step !== 1}>
                 {isRecorder ? (
-                  <div
-                    ref={recorderFields}
-                    className={styles.grid}
-                    onChange={() => setReview(undefined)}
-                  >
+                  <div className={styles.grid} onChange={() => setReview(undefined)}>
                     <label>
                       نام کاربری ضبط‌کننده
-                      <input name="recorderUsername" dir="ltr" maxLength={128} autoComplete="off" />
+                      <input
+                        {...recorderForm.register("username")}
+                        dir="ltr"
+                        maxLength={128}
+                        autoComplete="off"
+                      />
                     </label>
                     <label>
                       گذرواژه ضبط‌کننده
                       <input
-                        name="recorderPassword"
+                        {...recorderForm.register("password")}
                         type="password"
                         dir="ltr"
                         maxLength={1024}
@@ -729,17 +1012,93 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
                       />
                     </label>
                     <div className={styles.wide}>
+                      <Select
+                        label="روش اتصال ضبط‌کننده"
+                        value={recorderMode}
+                        onValueChange={(value) =>
+                          setRecorderMode(value as NonNullable<RecorderConnectionInput["mode"]>)
+                        }
+                        options={[
+                          ...(type === "camera" ? [] : [{ value: "auto", label: "تشخیص خودکار" }]),
+                          { value: "onvif", label: "ONVIF" },
+                          ...(type === "camera"
+                            ? []
+                            : [
+                                { value: "appweb", label: "AppWeb" },
+                                { value: "dvrip", label: "DVRIP" },
+                              ]),
+                          { value: "rtsp", label: "RTSP" },
+                        ]}
+                        disabled={busy}
+                      />
+                      {["onvif", "auto"].includes(recorderMode ?? "") && (
+                        <label>
+                          مسیر سرویس ONVIF
+                          <input
+                            {...recorderForm.register("onvifPath")}
+                            dir="ltr"
+                            maxLength={256}
+                          />
+                        </label>
+                      )}
+                      {recorderMode === "rtsp" && (
+                        <label>
+                          مسیر جریان RTSP
+                          <input
+                            dir="ltr"
+                            {...recorderForm.register("rtspPath")}
+                            maxLength={512}
+                            placeholder="/stream"
+                          />
+                        </label>
+                      )}
                       <label className="!flex-row items-center">
-                        <input className="!size-4 !min-h-0" type="checkbox" name="recorderHttps" />
-                        استفاده از HTTPS برای ONVIF
+                        <input
+                          className="!size-4 !min-h-0"
+                          type="checkbox"
+                          {...recorderForm.register("https")}
+                          disabled={["dvrip", "rtsp"].includes(recorderMode ?? "")}
+                        />
+                        استفاده از HTTPS
                       </label>
-                      <p className={styles.hint}>
-                        این اطلاعات فقط برای تست اتصال ONVIF استفاده می‌شود.
-                      </p>
+                      <label className="!flex-row items-center">
+                        <input
+                          className="!size-4 !min-h-0"
+                          type="checkbox"
+                          {...recorderForm.register("saveConnection")}
+                        />
+                        ذخیرهٔ امن اتصال پس از ثبت تجهیز
+                      </label>
                     </div>
                   </div>
+                ) : canTestApi ? (
+                  <ApiCredentialPicker
+                    value={apiCredentialId}
+                    onChange={(id) => {
+                      setApiCredentialId(id);
+                      setReview(undefined);
+                    }}
+                    disabled={busy}
+                  />
                 ) : canTestSsh ? (
                   <div className="grid gap-4">
+                    {type === "cisco" && (
+                      <Controller
+                        control={control}
+                        name="ciscoProfile"
+                        render={({ field }) => (
+                          <CiscoAccessFields
+                            value={field.value}
+                            disabled={busy}
+                            onBusyChange={setCredentialBusy}
+                            onChange={(value) => {
+                              field.onChange(value);
+                              setReview(undefined);
+                            }}
+                          />
+                        )}
+                      />
+                    )}
                     <div className={styles.tabs} aria-label="روش انتخاب اعتبارنامه">
                       <button
                         type="button"
@@ -864,6 +1223,10 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
                     <dd>{environmentLabels[review.device.environment]}</dd>
                   </div>
                   <div>
+                    <dt>محل نصب</dt>
+                    <dd>{review.device.location || "—"}</dd>
+                  </div>
+                  <div>
                     <dt>برچسب‌ها</dt>
                     <dd>{review.device.tags.join("، ") || "—"}</dd>
                   </div>
@@ -888,6 +1251,19 @@ export function DeviceFormDialog({ device, onClose }: { device?: Device; onClose
                     <dt>نتیجه تست</dt>
                     <dd>{review.verified ? "ورود مدیریتی تأیید شد" : "بدون تست اعتبارنامه"}</dd>
                   </div>
+                  {[
+                    ["Manufacturer", "سازندهٔ شناسایی‌شده"],
+                    ["Model", "مدل شناسایی‌شده"],
+                    ["FirmwareVersion", "نسخهٔ نرم‌افزار"],
+                  ].map(([key, label]) => {
+                    const value = review.identity?.[key];
+                    return value ? (
+                      <div key={key}>
+                        <dt>{label}</dt>
+                        <dd dir="auto">{value}</dd>
+                      </div>
+                    ) : null;
+                  })}
                 </dl>
               </section>
             )}

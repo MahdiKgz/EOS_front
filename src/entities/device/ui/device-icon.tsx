@@ -10,7 +10,7 @@ export function DeviceIcon({ vendor, type }: { vendor?: string; type?: string })
         ? "cisco"
         : name.includes("sophos")
           ? "sophos"
-          : ["nvr", "dvr"].includes(type ?? "")
+          : ["nvr", "dvr", "camera"].includes(type ?? "")
             ? "recorder"
             : name.includes("linux") || name.includes("vmware") || type === "esxi"
               ? "server"

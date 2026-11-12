@@ -27,7 +27,7 @@ export function ArchiveDeviceDialog({ device, onClose }: { device: Device; onClo
     <AnimatedDialog
       open={open}
       title="بایگانی تجهیز"
-      description={`«${device.name}» از فهرست تجهیزات فعال خارج می‌شود. اطلاعات ثبت‌شده در سامانه باقی می‌ماند.`}
+      description={`«${device.name}» از فهرست تجهیزات فعال خارج می‌شود. اطلاعات ثبت‌شده باقی می‌ماند و مدیر می‌تواند تجهیز را از فهرست بایگانی بازگرداند.`}
       busy={isLoading}
       onClose={() => setOpen(false)}
       onExited={onClose}

@@ -1,9 +1,11 @@
 "use client";
 import { useEffect, useId, useState } from "react";
+import toast from "react-hot-toast";
 import Link from "next/link";
 import {
   Archive,
   ArrowDownUp,
+  Building2,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -29,6 +31,8 @@ import {
   type Device,
   type DeviceListQuery,
   useDevicesQuery,
+  useDeviceCompaniesQuery,
+  useRestoreDeviceMutation,
 } from "@/entities/device";
 import {
   ArchiveDeviceDialog,
@@ -43,7 +47,15 @@ import styles from "./devices.module.css";
 const number = (value: number) => value.toLocaleString("fa-IR");
 const date = (value: string) =>
   new Intl.DateTimeFormat("fa-IR", { dateStyle: "medium" }).format(new Date(value));
-export function DevicesWorkspace({ user, overview = false }: { user: User; overview?: boolean }) {
+export function DevicesWorkspace({
+  user,
+  overview = false,
+  recorderInventory = false,
+}: {
+  user: User;
+  overview?: boolean;
+  recorderInventory?: boolean;
+}) {
   const [query, setQuery] = useState<DeviceListQuery>({
     page: 1,
     pageSize: 20,
@@ -55,7 +67,14 @@ export function DevicesWorkspace({ user, overview = false }: { user: User; overv
   const [editing, setEditing] = useState<Device | null | undefined>();
   const [details, setDetails] = useState<Device>();
   const [archiving, setArchiving] = useState<Device>();
-  const { data, currentData, isFetching, isLoading, error, refetch } = useDevicesQuery(query);
+  const { data, currentData, isFetching, isLoading, error, refetch } = useDevicesQuery({
+    ...query,
+    ...(recorderInventory ? { category: "recorder" } : {}),
+  });
+  const companies = useDeviceCompaniesQuery();
+  const archived = query.inventory === "archived";
+  const [restoreDevice, { isLoading: restoring, originalArgs: restoringId }] =
+    useRestoreDeviceMutation();
   const filtersId = useId();
   const canWrite = user.role !== "co_employee";
   useEffect(() => {
@@ -75,7 +94,13 @@ export function DevicesWorkspace({ user, overview = false }: { user: User; overv
   }
   const stats = error ? undefined : data?.stats;
   const summary = [
-    { key: "total", label: "کل تجهیزات", icon: Server, count: stats?.total, tone: "primary" },
+    {
+      key: "total",
+      label: recorderInventory ? "ضبط‌کننده‌ها" : "کل تجهیزات",
+      icon: Server,
+      count: stats?.total,
+      tone: "primary",
+    },
     { key: "online", label: "آنلاین", icon: Check, count: stats?.online, tone: "success" },
     {
       key: "needsReview",
@@ -86,18 +111,38 @@ export function DevicesWorkspace({ user, overview = false }: { user: User; overv
     },
     { key: "unknown", label: "بررسی‌نشده", icon: HelpCircle, count: stats?.unknown, tone: "muted" },
   ];
-  const activeFilters = [query.type, query.status, query.environment, query.category].filter(
-    Boolean,
-  ).length;
+  const activeFilters = [
+    query.type,
+    query.status,
+    query.environment,
+    query.companyId,
+    recorderInventory ? undefined : query.category,
+  ].filter(Boolean).length;
   const rows = currentData?.items ?? [];
   const pages = Math.max(1, Math.ceil((currentData?.total ?? 0) / query.pageSize));
   return (
     <main className={styles.page}>
       <header className={styles.heading}>
         <div>
-          <span className={styles.eyebrow}>دارایی‌ها / {overview ? "نمای کلی" : "تجهیزات"}</span>
-          <h1>{overview ? "نمای کلی دارایی‌ها" : "تجهیزات"}</h1>
-          <p>فهرست تجهیزات شبکه، سرورها و ضبط‌کننده‌های فضای کاری شما</p>
+          <span className={styles.eyebrow}>
+            دارایی‌ها / {recorderInventory ? "دوربین‌ها" : overview ? "نمای کلی" : "تجهیزات"}
+          </span>
+          <h1>
+            {recorderInventory
+              ? archived
+                ? "دوربین‌ها و ضبط‌کننده‌های بایگانی‌شده"
+                : "دوربین‌ها و ضبط‌کننده‌ها"
+              : archived
+                ? "تجهیزات بایگانی‌شده"
+                : overview
+                  ? "نمای کلی دارایی‌ها"
+                  : "تجهیزات"}
+          </h1>
+          <p>
+            {recorderInventory
+              ? "دوربین‌های IP و ضبط‌کننده‌های NVR و DVR شرکت‌های فضای کاری؛ پروفایل‌ها و وضعیت ضبط در جزئیات هر تجهیز در دسترس‌اند."
+              : "فهرست تجهیزات شبکه، سرورها و ضبط‌کننده‌های فضای کاری شما"}
+          </p>
         </div>
         <div className={styles.headingActions}>
           {overview && (
@@ -105,12 +150,26 @@ export function DevicesWorkspace({ user, overview = false }: { user: User; overv
               فهرست تجهیزات <ChevronLeft size={15} />
             </Link>
           )}
+          <Button
+            variant="outline"
+            aria-pressed={archived}
+            onClick={() => filter("inventory", archived ? "" : "archived")}
+          >
+            <Archive size={16} />
+            {recorderInventory
+              ? archived
+                ? "دوربین‌ها و ضبط‌کننده‌های فعال"
+                : "دوربین‌ها و ضبط‌کننده‌های بایگانی‌شده"
+              : archived
+                ? "تجهیزات فعال"
+                : "تجهیزات بایگانی‌شده"}
+          </Button>
           <Button variant="outline" onClick={() => setManagingCredentials(true)}>
             مدیریت اعتبارنامه‌ها
           </Button>
           <Button onClick={() => setEditing(null)}>
             <Plus size={17} />
-            افزودن تجهیز
+            {recorderInventory ? "افزودن دوربین / ضبط‌کننده" : "افزودن تجهیز"}
           </Button>
         </div>
       </header>
@@ -130,7 +189,9 @@ export function DevicesWorkspace({ user, overview = false }: { user: User; overv
       <section className={styles.panel} aria-labelledby="devices-table-title">
         <header className={styles.panelHeading}>
           <div>
-            <h2 id="devices-table-title">فهرست تجهیزات</h2>
+            <h2 id="devices-table-title">
+              {recorderInventory ? "فهرست دوربین‌ها و ضبط‌کننده‌ها" : "فهرست تجهیزات"}
+            </h2>
             <span>{currentData ? `${number(currentData.total)} تجهیز` : "تجهیزات ثبت‌شده"}</span>
           </div>
           <button
@@ -155,7 +216,7 @@ export function DevicesWorkspace({ user, overview = false }: { user: User; overv
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="جستجوی نام، آدرس، سازنده یا برچسب…"
+              placeholder="جستجوی نام، آدرس، سازنده، محل نصب یا برچسب…"
               aria-label="جستجوی سریع تجهیزات"
               maxLength={120}
             />
@@ -204,18 +265,47 @@ export function DevicesWorkspace({ user, overview = false }: { user: User; overv
                     ]}
                   />
                 </label>
+                {!recorderInventory && (
+                  <label>
+                    دسته
+                    <Select
+                      label="فیلتر دسته"
+                      value={query.category ?? ""}
+                      onValueChange={(value) => filter("category", value)}
+                      options={[
+                        { value: "", label: "همه تجهیزات" },
+                        { value: "network", label: "شبکه / سرور", icon: <Network /> },
+                        { value: "recorder", label: "ضبط‌کننده", icon: <Server /> },
+                      ]}
+                    />
+                  </label>
+                )}
                 <label>
-                  دسته
+                  شرکت مالک
                   <Select
-                    label="فیلتر دسته"
-                    value={query.category ?? ""}
-                    onValueChange={(value) => filter("category", value)}
+                    label="فیلتر شرکت مالک"
+                    value={query.companyId ?? ""}
+                    disabled={companies.isLoading}
+                    onValueChange={(value) => filter("companyId", value)}
                     options={[
-                      { value: "", label: "همه تجهیزات" },
-                      { value: "network", label: "شبکه / سرور", icon: <Network /> },
-                      { value: "recorder", label: "ضبط‌کننده", icon: <Server /> },
+                      { value: "", label: "همهٔ شرکت‌ها", icon: <Building2 size={16} /> },
+                      ...(companies.data ?? []).map((company) => ({
+                        value: company.id,
+                        label: company.name,
+                        icon: <Building2 size={16} />,
+                      })),
                     ]}
                   />
+                  {companies.error && (
+                    <button
+                      type="button"
+                      aria-label="دریافت دوبارهٔ شرکت‌ها"
+                      disabled={companies.isFetching}
+                      onClick={() => void companies.refetch()}
+                    >
+                      <RefreshCw size={14} />
+                    </button>
+                  )}
                 </label>
                 <label>
                   نوع تجهیز
@@ -225,11 +315,16 @@ export function DevicesWorkspace({ user, overview = false }: { user: User; overv
                     onValueChange={(value) => filter("type", value)}
                     options={[
                       { value: "", label: "همه انواع" },
-                      ...Object.entries(deviceTypeLabels).map(([value, label]) => ({
-                        value,
-                        label,
-                        icon: <DeviceIcon type={value} />,
-                      })),
+                      ...Object.entries(deviceTypeLabels)
+                        .filter(
+                          ([value]) =>
+                            !recorderInventory || ["nvr", "dvr", "camera"].includes(value),
+                        )
+                        .map(([value, label]) => ({
+                          value,
+                          label,
+                          icon: <DeviceIcon type={value} />,
+                        })),
                     ]}
                   />
                 </label>
@@ -256,6 +351,7 @@ export function DevicesWorkspace({ user, overview = false }: { user: User; overv
                     setQuery((current) => ({
                       page: 1,
                       pageSize: current.pageSize,
+                      inventory: current.inventory,
                       search: current.search,
                       sort: current.sort,
                       direction: current.direction,
@@ -319,12 +415,16 @@ export function DevicesWorkspace({ user, overview = false }: { user: User; overv
                               <DeviceIcon vendor={device.vendor} type={device.type} />
                               <div>
                                 <strong>
-                                  <Link
-                                    className="hover:underline"
-                                    href={`/dashboard/assets/devices/${device.id}`}
-                                  >
-                                    {device.name}
-                                  </Link>
+                                  {archived ? (
+                                    device.name
+                                  ) : (
+                                    <Link
+                                      className="hover:underline"
+                                      href={`/dashboard/assets/devices/${device.id}`}
+                                    >
+                                      {device.name}
+                                    </Link>
+                                  )}
                                 </strong>
                                 <span>
                                   <bdi>{device.vendor}</bdi>
@@ -361,34 +461,63 @@ export function DevicesWorkspace({ user, overview = false }: { user: User; overv
                           <td className={styles.date}>{date(device.createdAt)}</td>
                           <td>
                             <div className={styles.rowActions}>
-                              <button
-                                type="button"
-                                aria-label={`جزئیات و تست اتصال ${device.name}`}
-                                title="جزئیات و تست اتصال"
-                                onClick={() => setDetails(device)}
-                              >
-                                <Activity size={16} />
-                              </button>
-                              {canWrite && (
+                              {archived ? (
+                                canWrite && (
+                                  <Button
+                                    variant="outline"
+                                    disabled={isFetching || restoring}
+                                    onClick={async () => {
+                                      try {
+                                        const result = await restoreDevice(device.id).unwrap();
+                                        toast.success(result.message);
+                                        if (rows.length === 1 && query.page > 1)
+                                          setQuery((current) =>
+                                            current === query
+                                              ? { ...current, page: current.page - 1 }
+                                              : current,
+                                          );
+                                      } catch (error) {
+                                        toast.error(apiErrorMessage(error));
+                                      }
+                                    }}
+                                  >
+                                    {restoring && restoringId === device.id
+                                      ? "در حال بازیابی…"
+                                      : "بازگردانی"}
+                                  </Button>
+                                )
+                              ) : (
                                 <>
                                   <button
                                     type="button"
-                                    disabled={isFetching}
-                                    aria-label={`ویرایش ${device.name}`}
-                                    title="ویرایش تجهیز"
-                                    onClick={() => setEditing(device)}
+                                    aria-label={`جزئیات و تست اتصال ${device.name}`}
+                                    title="جزئیات و تست اتصال"
+                                    onClick={() => setDetails(device)}
                                   >
-                                    <Pencil size={16} />
+                                    <Activity size={16} />
                                   </button>
-                                  <button
-                                    type="button"
-                                    disabled={isFetching}
-                                    aria-label={`بایگانی ${device.name}`}
-                                    title="بایگانی تجهیز"
-                                    onClick={() => setArchiving(device)}
-                                  >
-                                    <Archive size={16} />
-                                  </button>
+                                  {canWrite && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        disabled={isFetching}
+                                        aria-label={`ویرایش ${device.name}`}
+                                        title="ویرایش تجهیز"
+                                        onClick={() => setEditing(device)}
+                                      >
+                                        <Pencil size={16} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={isFetching}
+                                        aria-label={`بایگانی ${device.name}`}
+                                        title="بایگانی تجهیز"
+                                        onClick={() => setArchiving(device)}
+                                      >
+                                        <Archive size={16} />
+                                      </button>
+                                    </>
+                                  )}
                                 </>
                               )}
                             </div>
@@ -404,14 +533,18 @@ export function DevicesWorkspace({ user, overview = false }: { user: User; overv
                 <h3>
                   {query.search || activeFilters
                     ? "تجهیزی با این مشخصات پیدا نشد"
-                    : "هنوز تجهیزی ثبت نشده است"}
+                    : archived
+                      ? "بایگانی خالی است"
+                      : "هنوز تجهیزی ثبت نشده است"}
                 </h3>
                 <p>
                   {query.search || activeFilters
                     ? "عبارت جستجو یا فیلترها را تغییر دهید."
-                    : "برای شروع، مشخصات اولین تجهیز را به فهرست اضافه کنید."}
+                    : archived
+                      ? "تجهیزات بایگانی‌شده در اینجا نمایش داده می‌شوند."
+                      : "برای شروع، مشخصات اولین تجهیز را به فهرست اضافه کنید."}
                 </p>
-                {!query.search && !activeFilters && (
+                {!archived && !query.search && !activeFilters && (
                   <Button variant="outline" onClick={() => setEditing(null)}>
                     <Plus size={16} />
                     افزودن تجهیز
@@ -469,7 +602,12 @@ export function DevicesWorkspace({ user, overview = false }: { user: User; overv
         <CredentialLibraryDialog onClose={() => setManagingCredentials(false)} />
       )}
       {editing !== undefined && (
-        <DeviceFormDialog device={editing ?? undefined} onClose={() => setEditing(undefined)} />
+        <DeviceFormDialog
+          device={editing ?? undefined}
+          draftOwnerId={user.id}
+          initialCategory={recorderInventory ? "recorder" : "network"}
+          onClose={() => setEditing(undefined)}
+        />
       )}
       {details && (
         <DeviceDetailsDialog

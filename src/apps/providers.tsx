@@ -1,56 +1,10 @@
 "use client";
 import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import dynamic from "next/dynamic";
 import { Provider } from "react-redux";
 import { setupListeners } from "@reduxjs/toolkit/query";
-import { Toaster } from "react-hot-toast";
 import { makeStore } from "./store";
-function ToastLayer() {
-  const [host] = useState(() =>
-    typeof document === "undefined" ? null : document.createElement("div"),
-  );
-  useEffect(() => {
-    if (!host) return;
-    // Native modal dialogs render in the browser's top layer.
-    const updateHost = () => {
-      const dialogs = document.querySelectorAll("dialog:modal");
-      const parent = dialogs[dialogs.length - 1] ?? document.body;
-      if (host.parentElement !== parent) parent.append(host);
-    };
-    const observer = new MutationObserver(updateHost);
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["open"],
-      childList: true,
-      subtree: true,
-    });
-    updateHost();
-    return () => {
-      observer.disconnect();
-      host.remove();
-    };
-  }, [host]);
-  return host
-    ? createPortal(
-        <Toaster
-          position="top-center"
-          toastOptions={{
-            duration: 5000,
-            style: {
-              background: "var(--card)",
-              color: "var(--foreground)",
-              border: "1px solid var(--border)",
-              fontFamily: "Tahoma, sans-serif",
-              fontSize: "13px",
-              lineHeight: "1.9",
-              direction: "rtl",
-            },
-          }}
-        />,
-        host,
-      )
-    : null;
-}
+const ToastLayer = dynamic(() => import("./toast-layer"), { ssr: false });
 export function Providers({ children }: { children: React.ReactNode }) {
   const [store] = useState(makeStore);
   useEffect(() => setupListeners(store.dispatch), [store]);

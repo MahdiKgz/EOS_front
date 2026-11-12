@@ -16,10 +16,27 @@ const options = [
 ];
 type Result = { output: string; checkedAt: string; saved?: boolean };
 
-export function LinuxSshDialog({ device, onClose }: { device: Device; onClose: () => void }) {
+export function LinuxSshDialog({
+  device,
+  onClose,
+  onVerified,
+}: {
+  device: Device;
+  onClose: () => void;
+  onVerified: () => void;
+}) {
+  const linux = device.type === "linux_edge";
+  const deviceOptions = !linux
+    ? options
+        .filter(({ value }) => value !== "backup")
+        .map((option) =>
+          option.value === "diagnostics" ? { ...option, label: "مسیرهای IPv4 و IPv6" } : option,
+        )
+    : options;
   const [open, setOpen] = useState(true);
   const [operation, setOperation] = useState("verify");
   const [useSaved, setUseSaved] = useState(false);
+  const [authMethod, setAuthMethod] = useState("key");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [result, setResult] = useState<Result>();
@@ -49,7 +66,9 @@ export function LinuxSshDialog({ device, onClose }: { device: Device; onClose: (
                   .split(/\s+/)
                   .slice(0, 2)
                   .join(" "),
-                privateKey: String(fields.get("privateKey") ?? ""),
+                ...(authMethod === "password"
+                  ? { password: String(fields.get("password") ?? "") }
+                  : { privateKey: String(fields.get("privateKey") ?? "") }),
               }),
         }),
       });
@@ -59,6 +78,7 @@ export function LinuxSshDialog({ device, onClose }: { device: Device; onClose: (
           typeof data.message === "string" ? data.message : "اطلاعات اتصال را بررسی کنید.",
         );
       setResult(data);
+      if (operation === "verify") onVerified();
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "عملیات SSH انجام نشد.");
     } finally {
@@ -89,7 +109,7 @@ export function LinuxSshDialog({ device, onClose }: { device: Device; onClose: (
         <fieldset disabled={busy} className="grid gap-3 text-sm">
           <Select
             label="عملیات SSH"
-            options={options}
+            options={deviceOptions}
             value={operation}
             onValueChange={(value) => {
               setOperation(value);
@@ -126,18 +146,42 @@ export function LinuxSshDialog({ device, onClose }: { device: Device; onClose: (
                   placeholder="ssh-ed25519 AAAA…"
                 />
               </label>
-              <label className="grid gap-1">
-                کلید خصوصی بدون عبارت عبور
-                <textarea
-                  name="privateKey"
-                  dir="ltr"
-                  required
-                  maxLength={12000}
-                  spellCheck={false}
-                  rows={3}
-                  className="rounded-md border bg-background p-2 font-mono"
-                />
-              </label>
+              <Select
+                label="روش احراز هویت SSH"
+                options={[
+                  { value: "key", label: "کلید خصوصی" },
+                  { value: "password", label: "گذرواژه" },
+                ]}
+                value={authMethod}
+                onValueChange={setAuthMethod}
+                disabled={busy}
+              />
+              {authMethod === "password" ? (
+                <label className="grid gap-1">
+                  گذرواژه SSH
+                  <Input
+                    dir="ltr"
+                    name="password"
+                    type="password"
+                    required
+                    maxLength={1024}
+                    autoComplete="new-password"
+                  />
+                </label>
+              ) : (
+                <label className="grid gap-1">
+                  کلید خصوصی بدون عبارت عبور
+                  <textarea
+                    name="privateKey"
+                    dir="ltr"
+                    required
+                    maxLength={12000}
+                    spellCheck={false}
+                    rows={3}
+                    className="rounded-md border bg-background p-2 font-mono"
+                  />
+                </label>
+              )}
               {operation === "verify" && (
                 <label className="flex items-center gap-2">
                   <input type="checkbox" name="saveConnection" />
@@ -162,7 +206,7 @@ export function LinuxSshDialog({ device, onClose }: { device: Device; onClose: (
             {result.saved
               ? "اتصال تأیید و ذخیره شد."
               : operation === "verify"
-                ? "ورود مدیریتی به Linux تأیید شد."
+                ? "ورود مدیریتی به تجهیز تأیید شد."
                 : "داده از تجهیز دریافت شد."}
           </p>
           <pre dir="ltr" className="max-h-64 overflow-auto rounded-md bg-background p-3 text-xs">

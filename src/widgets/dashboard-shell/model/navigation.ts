@@ -5,10 +5,10 @@ export const dashboardNavigation = [
     items: [
       { title: "نمای کلی", href: "/dashboard/assets" },
       { title: "تجهیزات", href: "/dashboard/assets/devices" },
-      ...["پورت‌ها و اتصالات", "دوربین‌ها", "وندورها"].map((title) => ({
-        title,
-        href: null,
-      })),
+      { title: "بک‌آپ‌ها", href: "/dashboard/assets/backups" },
+      { title: "دوربین‌ها", href: "/dashboard/assets/cameras" },
+      { title: "پورت‌ها و اتصالات", href: null },
+      { title: "وندورها", href: "/dashboard/assets/vendors" },
     ],
   },
   {

@@ -5,25 +5,42 @@ import Link from "next/link";
 import { useState } from "react";
 import {
   DeviceIcon,
+  deviceApiKind,
   deviceTypeLabels,
   environmentLabels,
   statusLabels,
   useDeviceQuery,
   useDeviceHistoryQuery,
+  useDeviceInventoryEventsQuery,
 } from "@/entities/device";
-import { DeviceDetailsDialog, DeviceFormDialog, LinuxSshDialog } from "@/features/manage-device";
+import {
+  EsxiConnection,
+  CiscoCapabilities,
+  FortigateCapabilities,
+  NetworkApiConnection,
+  DeviceDetailsDialog,
+  DeviceFormDialog,
+  LinuxSshDialog,
+  RecorderVerificationDialog,
+} from "@/features/manage-device";
 import { Button } from "@/shared/ui/button";
 import { apiErrorMessage } from "@/shared/api/error-message";
+
+import { DeviceMonitoring } from "./device-monitoring";
+import { DeviceConnectionChannels } from "./device-connection-channels";
+import { DeviceBackups } from "./device-backups";
+import { RecorderStatus } from "./recorder-status";
 
 const timestamp = new Intl.DateTimeFormat("fa-IR", { dateStyle: "short", timeStyle: "short" });
 
 export function DeviceWorkspace({ id, canWrite }: { id: string; canWrite: boolean }) {
-  const [dialog, setDialog] = useState<"test" | "edit" | "ssh">();
+  const [dialog, setDialog] = useState<"test" | "edit" | "ssh" | "onvif">();
   const { data: device, error, refetch } = useDeviceQuery(id);
+  const events = useDeviceInventoryEventsQuery(id, { skip: !device });
   const history = useDeviceHistoryQuery(id, { skip: !device });
 
   return (
-    <main className="mx-auto grid max-w-6xl gap-6 p-5 sm:p-8">
+    <main className="grid min-w-0 gap-6 p-5 sm:p-8">
       <Link
         className="inline-flex w-fit items-center gap-[4px] justify-self-end text-sm text-primary hover:underline"
         href="/dashboard/assets/devices"
@@ -53,11 +70,24 @@ export function DeviceWorkspace({ id, canWrite }: { id: string; canWrite: boolea
                   ویرایش تجهیز
                 </Button>
                 <Button onClick={() => setDialog("test")}>تست اتصال</Button>
-                {device.type === "linux_edge" && device.protocol === "ssh" && (
-                  <Button variant="outline" onClick={() => setDialog("ssh")}>
-                    مدیریت SSH
+                {device.protocol === "ssh" && (
+                  <Button variant="outline" asChild>
+                    <Link href={`/dashboard/assets/devices/${id}/terminal`}>ترمینال تجهیز</Link>
                   </Button>
                 )}
+                {["nvr", "dvr", "camera"].includes(device.type) && device.protocol === "api" && (
+                  <Button variant="outline" onClick={() => setDialog("onvif")}>
+                    {device.type === "camera" ? "تأیید اتصال دوربین" : "تأیید اتصال ضبط‌کننده"}
+                  </Button>
+                )}
+                {["linux_edge", "mikrotik", "pfsense", "esxi", "fortigate", "cisco"].includes(
+                  device.type,
+                ) &&
+                  device.protocol === "ssh" && (
+                    <Button variant="outline" onClick={() => setDialog("ssh")}>
+                      مدیریت SSH
+                    </Button>
+                  )}
               </div>
             )}
           </header>
@@ -78,7 +108,17 @@ export function DeviceWorkspace({ id, canWrite }: { id: string; canWrite: boolea
                     {device.protocol.toUpperCase()} · {device.managementPort}
                   </bdi>,
                 ],
+                ["محل نصب", device.location || "—"],
                 ["محیط", environmentLabels[device.environment]],
+                [
+                  "تأیید اتصال مدیریتی",
+                  device.verification
+                    ? timestamp.format(new Date(device.verification.checkedAt))
+                    : "تأیید نشده",
+                ],
+                ...(device.verification?.identity?.FirmwareVersion
+                  ? [["نسخهٔ شناسایی‌شده", device.verification.identity.FirmwareVersion]]
+                  : []),
                 ["وضعیت دسترسی", statusLabels[device.status]],
                 [
                   "آخرین پاسخ موفق",
@@ -93,6 +133,40 @@ export function DeviceWorkspace({ id, canWrite }: { id: string; canWrite: boolea
               ))}
             </dl>
           </section>
+          {canWrite && device.type === "esxi" && ["api", "ssh"].includes(device.protocol) && (
+            <EsxiConnection
+              key={`esxi-${device.id}-${device.protocol}`}
+              device={device}
+              onSshSettings={() => setDialog("ssh")}
+            />
+          )}
+          {canWrite && ["mikrotik", "sophos"].includes(deviceApiKind(device) ?? "") && (
+            <NetworkApiConnection
+              key={`api-${device.id}-${deviceApiKind(device)}`}
+              device={device}
+            />
+          )}
+          {device.type === "cisco" && device.protocol === "ssh" && (
+            <CiscoCapabilities id={device.id} companyId={device.companyId} canWrite={canWrite} />
+          )}
+          {device.type === "fortigate" && device.protocol === "ssh" && (
+            <FortigateCapabilities
+              id={device.id}
+              companyId={device.companyId}
+              canWrite={canWrite}
+            />
+          )}
+          <DeviceConnectionChannels key={device.id} id={device.id} canWrite={canWrite} />
+          {((device.type === "linux_edge" && device.protocol === "ssh") ||
+            ["mikrotik", "cisco", "fortigate", "pfsense", "esxi", "generic_firewall"].includes(
+              device.type,
+            )) && (
+            <DeviceMonitoring
+              key={`monitor-${device.id}-${device.companyId}`}
+              id={device.id}
+              canWrite={canWrite}
+            />
+          )}
           <section className="rounded-xl border bg-card p-5" aria-labelledby="check-history">
             <h2 id="check-history" className="font-semibold">
               تاریخچه تست دسترسی
@@ -145,6 +219,45 @@ export function DeviceWorkspace({ id, canWrite }: { id: string; canWrite: boolea
               </div>
             )}
           </section>
+          {canWrite &&
+            ["nvr", "dvr", "camera"].includes(device.type) &&
+            device.protocol === "api" && <RecorderStatus key={device.id} id={device.id} />}
+          {canWrite && <DeviceBackups key={device.id} id={device.id} protocol={device.protocol} />}
+          <section className="grid gap-3 rounded-xl border bg-card p-5">
+            <h2 className="font-semibold">تاریخچه تغییرات تجهیز</h2>
+            {events.error ? (
+              <div className="flex flex-wrap items-center gap-3" role="alert">
+                <p>{apiErrorMessage(events.error)}</p>
+                <Button variant="outline" onClick={() => void events.refetch()}>
+                  تلاش دوباره
+                </Button>
+              </div>
+            ) : events.isLoading ? (
+              <p role="status">در حال دریافت تغییرات…</p>
+            ) : events.data?.length ? (
+              <ul className="grid gap-2 text-sm">
+                {events.data.map((event) => (
+                  <li key={event.id} className="flex flex-wrap justify-between gap-2 border-b py-2">
+                    <span>
+                      {
+                        {
+                          archived: "بایگانی",
+                          restored: "بازگردانی",
+                          transferred: "تغییر شرکت مالک",
+                        }[event.action]
+                      }{" "}
+                      · {event.actorName}
+                    </span>
+                    <time dateTime={event.occurredAt}>
+                      {timestamp.format(new Date(event.occurredAt))}
+                    </time>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-muted-foreground">تغییری ثبت نشده است.</p>
+            )}
+          </section>
           {dialog === "test" && (
             <DeviceDetailsDialog
               device={device}
@@ -153,7 +266,18 @@ export function DeviceWorkspace({ id, canWrite }: { id: string; canWrite: boolea
             />
           )}
           {dialog === "ssh" && (
-            <LinuxSshDialog device={device} onClose={() => setDialog(undefined)} />
+            <LinuxSshDialog
+              device={device}
+              onClose={() => setDialog(undefined)}
+              onVerified={() => void refetch()}
+            />
+          )}
+          {dialog === "onvif" && (
+            <RecorderVerificationDialog
+              device={device}
+              onClose={() => setDialog(undefined)}
+              onVerified={() => void refetch()}
+            />
           )}
           {dialog === "edit" && (
             <DeviceFormDialog device={device} onClose={() => setDialog(undefined)} />
